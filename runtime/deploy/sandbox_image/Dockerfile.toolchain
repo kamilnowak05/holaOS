@@ -1,0 +1,43 @@
+FROM python:3.12-slim-bookworm@sha256:883fb7fcf461dc7ab7601180568ad4afbd9d018371afa41b18c8a1124a81a66e
+
+ARG NODE_MAJOR=22
+ARG INSTALL_QMD=1
+ARG ENABLE_QMD_PREWARM=0
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_SYSTEM_PYTHON=1 \
+    UV_HTTP_TIMEOUT=120 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH="/opt/venv/bin:/root/.local/bin:${PATH}"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      bash coreutils curl git ca-certificates procps iproute2 gnupg gcc python3-dev libpq-dev \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+      | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+      > /etc/apt/sources.list.d/nodesource.list \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg \
+      | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable" \
+      > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nodejs docker-ce docker-ce-cli containerd.io docker-compose-plugin fuse-overlayfs tini \
+    && npm install -g npm@latest \
+    && if [ "${INSTALL_QMD}" = "1" ]; then npm install -g @tobilu/qmd; fi \
+    && if [ "${INSTALL_QMD}" = "1" ] && [ "${ENABLE_QMD_PREWARM}" = "1" ]; then \
+         mkdir -p /tmp/qmd-preload-build \
+         && printf '%s\n' 'QMD build preload warmup document.' > /tmp/qmd-preload-build/preload.md \
+         && qmd --index qmd-preload-build collection add /tmp/qmd-preload-build --name preload \
+         && qmd --index qmd-preload-build update \
+         && qmd --index qmd-preload-build query "preload" --json -n 1 >/tmp/qmd-preload-build-query.json \
+         && rm -rf /tmp/qmd-preload-build /tmp/qmd-preload-build-query.json; \
+       fi \
+    && npm install -g opencode-ai@latest \
+    && opencode --version \
+    && apt-get purge -y --auto-remove gnupg \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
