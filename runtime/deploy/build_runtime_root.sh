@@ -58,7 +58,7 @@ cat > "${OUTPUT_ROOT}/metadata.json" <<EOF
   "git_sha": "${GIT_SHA}",
   "build_id": "${BUILD_ID}",
   "built_at_utc": "${BUILD_TIMESTAMP_UTC}",
-  "source_path": "runtime/deploy/sandbox_image"
+  "source_path": "runtime/deploy"
 }
 EOF
 

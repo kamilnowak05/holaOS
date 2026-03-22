@@ -2,30 +2,30 @@
 
 This audit answers one question:
 
-Can `deploy/sandbox_image/sandbox_agent_runtime/*` stand alone without importing code from `hola-boss-ai/src`?
+Can the extracted OSS `deploy/sandbox_agent_runtime/*` stand alone without importing code from `hola-boss-ai/src`?
 
 ## Result
 
 Yes on the Python import boundary.
 
 Direct scan result:
-- `deploy/sandbox_image/sandbox_agent_runtime/*` has no direct imports whose top-level module is `api`, `core`, `services`, `config`, `shared`, `utils`, or `integrations`
+- `deploy/sandbox_agent_runtime/*` has no direct imports whose top-level module is `api`, `core`, `services`, `config`, `shared`, `utils`, or `integrations`
 - so the runtime package itself does not currently depend on `src/...` Python modules
 
 ## What It Does Depend On
 
-The runtime package still depends on sibling files under `deploy/sandbox_image` for packaging and startup:
+The runtime package still depends on sibling files under the extracted `deploy/` directory for packaging and startup:
 
-- `deploy/sandbox_image/pyproject.toml`
-- `deploy/sandbox_image/uv.lock`
-- `deploy/sandbox_image/bootstrap/container.sh`
-- `deploy/sandbox_image/bootstrap/macos.sh`
-- `deploy/sandbox_image/bootstrap/shared.sh`
-- `deploy/sandbox_image/build_runtime_root.sh`
-- `deploy/sandbox_image/entrypoint.sh`
-- `deploy/sandbox_image/package_macos_runtime.sh`
-- `deploy/sandbox_image/Dockerfile`
-- `deploy/sandbox_image/Dockerfile.toolchain`
+- `deploy/pyproject.toml`
+- `deploy/uv.lock`
+- `deploy/bootstrap/container.sh`
+- `deploy/bootstrap/macos.sh`
+- `deploy/bootstrap/shared.sh`
+- `deploy/build_runtime_root.sh`
+- `deploy/entrypoint.sh`
+- `deploy/package_macos_runtime.sh`
+- `deploy/Dockerfile`
+- `deploy/Dockerfile.toolchain`
 
 Those are packaging/runtime-root dependencies, not `src/...` dependencies.
 
@@ -35,7 +35,7 @@ These have now been normalized in the OSS repo:
 
 - `build_runtime_root.sh` defaults output to `runtime/out/runtime-root`
 - `package_macos_runtime.sh` defaults output to `runtime/out/runtime-macos`
-- `Dockerfile` now expects its build context to be the `sandbox_image` directory itself
+- `Dockerfile` now expects its build context to be the extracted `deploy` directory itself
 
 ## What Was Removed From The OSS Repo
 
@@ -82,4 +82,4 @@ Observed output:
 
 ## Next Step
 
-Make `deploy/sandbox_image` the sole imported runtime surface in `hola-boss-oss`, then separately audit whether any external release flow still requires additional non-`src` files outside that subtree.
+Make the extracted `deploy/` directory the sole imported runtime surface in `hola-boss-oss`, then separately audit whether any external release flow still requires additional non-`src` files outside that boundary.

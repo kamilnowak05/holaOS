@@ -10,7 +10,7 @@ Only import this path from `hola-boss-ai`:
 
 It should land in this repo as:
 
-- `runtime/deploy/sandbox_image/`
+- `runtime/deploy/`
 
 ## Not Allowed Right Now
 
@@ -20,7 +20,7 @@ Do not import any of the following until a dependency audit proves they are requ
 - any path under `hola-boss-ai/test/`
 - `hola-boss-ai/examples/`
 - `hola-boss-ai/scripts/`
-- top-level runtime compose files or repo-level packaging files outside `deploy/sandbox_image`
+- top-level runtime compose files or repo-level packaging files outside the imported `deploy/sandbox_image` source boundary
 - any files from `hola-boss-desktop`
 
 ## Rule For Expanding The Boundary

@@ -38,10 +38,13 @@ main() {
   }
 
   rm -rf "$RUNTIME_DEST"
-  mkdir -p "$RUNTIME_DEST"
-  sync_tree_from_git "$AI_SRC" "$RUNTIME_DEST" "${AI_PATHS[@]}"
+  mkdir -p "$RUNTIME_DEST/deploy"
+  git -C "$AI_SRC" archive --format=tar HEAD deploy/sandbox_image | tar -x -C "$RUNTIME_DEST"
+  shopt -s dotglob
+  mv "$RUNTIME_DEST/deploy/sandbox_image"/* "$RUNTIME_DEST/deploy/"
+  rmdir "$RUNTIME_DEST/deploy/sandbox_image"
 
-  echo "synced runtime/deploy/sandbox_image -> $RUNTIME_DEST/deploy/sandbox_image"
+  echo "synced hola-boss-ai/deploy/sandbox_image -> $RUNTIME_DEST/deploy"
 }
 
 main "$@"
