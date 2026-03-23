@@ -234,7 +234,7 @@ let runtimeStatus: RuntimeStatusPayload = {
 const RUNTIME_API_PORT = 5060;
 const RUNTIME_OPENCODE_PORT = 5096;
 const DEV_RUNTIME_ROOT = "/tmp/holaboss-runtime-macos-full";
-const STAGED_RUNTIME_ROOT = path.join("build", "runtime-macos");
+const STAGED_RUNTIME_ROOT = path.join("out", "desktop", "runtime-macos");
 const DESKTOP_USER_DATA_DIR = (process.env.HOLABOSS_DESKTOP_USER_DATA_DIR?.trim() || "holaboss-local").replace(
   /[\\/]+/g,
   "_"

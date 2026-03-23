@@ -38,7 +38,7 @@ npm run dev
 
 This launches:
 - Vite dev server for the renderer (`http://localhost:5173`)
-- TS build watcher for Electron main/preload (`dist-electron/*.cjs`)
+- TS build watcher for Electron main/preload (`../out/desktop/dist-electron/*.cjs`)
 - Electron desktop window with live restarts on main/preload changes
 
 Control-plane endpoint presets:
@@ -54,7 +54,7 @@ npm run dev:cp:dev
 npm run dev:cp:prod
 ```
 
-`prepare:runtime` downloads the pinned macOS runtime bundle from the GitHub release defined in [runtime-manifest.json](/Users/jeffrey/Desktop/hola-boss-desktop/runtime-manifest.json) and stages it into `build/runtime-macos/`.
+`prepare:runtime` downloads the pinned macOS runtime bundle from the GitHub release defined in [runtime-manifest.json](/Users/jeffrey/Desktop/hola-boss-oss/desktop/runtime-manifest.json) and stages it into `../out/desktop/runtime-macos/`.
 
 ## Build
 
@@ -63,12 +63,12 @@ npm run build
 ```
 
 This creates:
-- Renderer production bundle in `dist/`
-- Electron main/preload bundles in `dist-electron/`
+- Renderer production bundle in `../out/desktop/dist/`
+- Electron main/preload bundles in `../out/desktop/dist-electron/`
 
 ## Runtime Bundle
 
-Production mac builds expect a staged runtime bundle at `build/runtime-macos/`. You can stage it with:
+Production mac builds expect a staged runtime bundle at `../out/desktop/runtime-macos/`. You can stage it with:
 
 ```bash
 npm run prepare:runtime
@@ -80,7 +80,7 @@ For local development against unreleased `hola-boss-oss` runtime changes:
 # optional when your OSS repo is not ../hola-boss-oss
 export HOLABOSS_OSS_ROOT=/absolute/path/to/hola-boss-oss
 
-# builds runtime bundle from local hola-boss-oss and stages it into build/runtime-macos
+# builds runtime bundle from local hola-boss-oss and stages it into ../out/desktop/runtime-macos
 npm run prepare:runtime:local
 ```
 
@@ -94,7 +94,7 @@ The staging script accepts one of:
 - `HOLABOSS_RUNTIME_DIR=/absolute/path/to/runtime-macos`
 - `HOLABOSS_RUNTIME_TARBALL=/absolute/path/to/holaboss-runtime-macos-<sha>.tar.gz`
 - `HOLABOSS_RUNTIME_BUNDLE_URL=https://.../holaboss-runtime-macos-<sha>.tar.gz`
-- `HOLABOSS_GITHUB_TOKEN=...` or `GITHUB_TOKEN=...` to fetch the pinned asset from GitHub Releases using [runtime-manifest.json](/Users/jeffrey/Desktop/hola-boss-desktop/runtime-manifest.json)
+- `HOLABOSS_GITHUB_TOKEN=...` or `GITHUB_TOKEN=...` to fetch the pinned asset from GitHub Releases using [runtime-manifest.json](/Users/jeffrey/Desktop/hola-boss-oss/desktop/runtime-manifest.json)
 
 If none are set, it falls back to `/tmp/holaboss-runtime-macos-full` when present.
 
@@ -104,17 +104,17 @@ To build a mac app bundle with the runtime embedded in Electron resources:
 GITHUB_TOKEN="$(gh auth token)" npm run dist:mac
 ```
 
-Use `dist:mac` when you intentionally want the runtime pinned in [runtime-manifest.json](/Users/jeffrey/Desktop/hola-boss-desktop/runtime-manifest.json) from GitHub releases. Use `dist:mac:local` for local unreleased runtime code.
+Use `dist:mac` when you intentionally want the runtime pinned in [runtime-manifest.json](/Users/jeffrey/Desktop/hola-boss-oss/desktop/runtime-manifest.json) from GitHub releases. Use `dist:mac:local` for local unreleased runtime code.
 
 This produces an unsigned local mac app bundle with `runtime-macos` embedded in `Contents/Resources/`.
 
 Output:
-- [Holaboss Workspace.app](/Users/jeffrey/Desktop/hola-boss-desktop/release/mac-arm64/Holaboss%20Workspace.app)
+- [Holaboss Workspace.app](/Users/jeffrey/Desktop/hola-boss-oss/out/desktop/release/mac-arm64/Holaboss%20Workspace.app)
 
 Run packaged app with endpoint presets:
 
 ```bash
-# uses release/mac-arm64/... by default
+# uses ../out/desktop/release/mac-arm64/... by default
 npm run packaged:run:local
 npm run packaged:run:dev
 npm run packaged:run:prod
@@ -133,7 +133,7 @@ To build a mac installer image:
 GITHUB_TOKEN="$(gh auth token)" npm run dist:mac:dmg
 ```
 
-This produces an unsigned `.dmg` installer in `release/`.
+This produces an unsigned `.dmg` installer in `../out/desktop/release/`.
 
 Notes:
 - `dist:mac` builds an unpacked `.app`

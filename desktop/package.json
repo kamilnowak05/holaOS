@@ -2,8 +2,9 @@
   "name": "holaboss-local",
   "private": true,
   "version": "0.1.0",
-  "main": "dist-electron/main.cjs",
+  "main": "../out/desktop/dist-electron/main.cjs",
   "scripts": {
+    "clean": "rm -rf ../out/desktop out build",
     "predev": "kill-port 5173",
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron:build\" \"npm:dev:electron:run\"",
     "dev:cp:local": "cross-env PROACTIVE_ENABLE_REMOTE_BRIDGE=true PROACTIVE_BRIDGE_BASE_URL=http://127.0.0.1:3032 HOLABOSS_PROACTIVE_URL=http://127.0.0.1:3032 HOLABOSS_DESKTOP_CONTROL_PLANE_BASE_URL=http://127.0.0.1:3060 HOLABOSS_PROJECTS_URL=http://127.0.0.1:3033 HOLABOSS_MARKETPLACE_URL=http://127.0.0.1:3037 npm run dev",
@@ -15,7 +16,7 @@
     "dev:cp:prod:verbose": "cross-env HOLABOSS_VERBOSE_TELEMETRY=1 HOLABOSS_DESKTOP_CONTROL_PLANE_BASE_URL=http://35.160.37.189:3060 HOLABOSS_PROJECTS_URL=http://35.160.37.189:3033 HOLABOSS_MARKETPLACE_URL=http://35.160.37.189:3037 npm run dev",
     "dev:renderer": "vite",
     "dev:electron:build": "tsup --config tsup.config.ts --watch",
-    "dev:electron:run": "wait-on tcp:5173 file:dist-electron/main.cjs && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electronmon dist-electron/main.cjs",
+    "dev:electron:run": "wait-on tcp:5173 file:../out/desktop/dist-electron/main.cjs && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electronmon ../out/desktop/dist-electron/main.cjs",
     "prepare:runtime": "node scripts/stage-runtime-bundle.mjs",
     "prepare:runtime:local": "node scripts/prepare-runtime-local.mjs",
     "build": "npm run build:renderer && npm run build:electron",
@@ -71,16 +72,16 @@
     "appId": "com.holaboss.workspace",
     "productName": "Holaboss Workspace",
     "directories": {
-      "output": "release"
+      "output": "../out/desktop/release"
     },
     "files": [
-      "dist/**/*",
-      "dist-electron/**/*",
+      "../out/desktop/dist/**/*",
+      "../out/desktop/dist-electron/**/*",
       "package.json"
     ],
     "extraResources": [
       {
-        "from": "build/runtime-macos",
+        "from": "../out/desktop/runtime-macos",
         "to": "runtime-macos",
         "filter": [
           "**/*"

@@ -5,6 +5,10 @@ import path from "node:path";
 export default defineConfig({
   base: "./",
   plugins: [react()],
+  build: {
+    outDir: "../out/desktop/dist",
+    emptyOutDir: true
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src")

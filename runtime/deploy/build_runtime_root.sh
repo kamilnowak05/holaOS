@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_ROOT="$(cd "${RUNTIME_ROOT}/.." && pwd)"
-OUTPUT_ROOT="${1:-${RUNTIME_ROOT}/out/runtime-root}"
+OUTPUT_ROOT="${1:-${REPO_ROOT}/out/runtime-root}"
 
 RUNTIME_VERSION="$(awk -F' = ' '$1=="version" {gsub(/"/, "", $2); print $2; exit}' "${RUNTIME_ROOT}/pyproject.toml")"
 if [ -z "${RUNTIME_VERSION}" ]; then

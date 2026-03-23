@@ -11,7 +11,7 @@ export default defineConfig({
     "electron/addressSuggestionsPopupPreload.ts"
   ],
   format: ["cjs"],
-  outDir: "dist-electron",
+  outDir: "../out/desktop/dist-electron",
   clean: false,
   splitting: false,
   platform: "node",
