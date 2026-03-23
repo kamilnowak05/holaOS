@@ -94,6 +94,8 @@ _WORKSPACE_MCP_STATE_VERSION = 1
 _WORKSPACE_MCP_STDOUT_LOG_BASENAME = "workspace-mcp-sidecar.stdout.log"
 _WORKSPACE_MCP_STDERR_LOG_BASENAME = "workspace-mcp-sidecar.stderr.log"
 _WORKSPACE_MCP_LOG_TAIL_BYTES = 4096
+_OPENCODE_STATE_FILE_NAME = "opencode-sidecar-state.json"
+_OPENCODE_STATE_VERSION = 1
 
 
 class RunnerRequest(BaseModel):
@@ -906,6 +908,43 @@ def _release_opencode_lock(*, lock_file: Any) -> None:
         lock_file.close()
 
 
+def _opencode_state_path() -> Path:
+    state_dir = Path(WORKSPACE_ROOT) / _SESSION_STATE_DIR_NAME
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return state_dir / _OPENCODE_STATE_FILE_NAME
+
+
+def _read_opencode_sidecar_state() -> dict[str, Any]:
+    state_path = _opencode_state_path()
+    if not state_path.is_file():
+        return {}
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    if int(payload.get("version") or 0) != _OPENCODE_STATE_VERSION:
+        return {}
+    sidecar = payload.get("sidecar")
+    if not isinstance(sidecar, dict):
+        return {}
+    return sidecar
+
+
+def _write_opencode_sidecar_state(entry: dict[str, Any]) -> None:
+    state_path = _opencode_state_path()
+    payload = {
+        "version": _OPENCODE_STATE_VERSION,
+        "sidecar": entry,
+    }
+    state_path.write_text(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2), encoding="utf-8")
+
+
+def _clear_opencode_sidecar_state() -> None:
+    _opencode_state_path().unlink(missing_ok=True)
+
+
 def _read_workspace_mcp_sidecar_state() -> dict[str, dict[str, Any]]:
     state_path = _workspace_mcp_state_path()
     if not state_path.is_file():
@@ -1335,7 +1374,12 @@ def _enabled_flag(name: str) -> bool:
 def _direct_openai_fallback_enabled() -> bool:
     if _enabled_flag(_DIRECT_OPENAI_FALLBACK_FLAG):
         return True
-    return _runtime_flavor() == "oss"
+    config = resolve_product_runtime_config(
+        require_auth=False,
+        require_user=False,
+        require_base_url=False,
+    )
+    return not config.holaboss_enabled
 
 
 def _runtime_exec_context(request: RunnerRequest) -> dict[str, Any]:
@@ -1930,17 +1974,10 @@ def _extract_error_payload(chunk: Any) -> dict[str, Any] | None:
     return payload
 
 
-def _runtime_flavor() -> str:
-    raw = (os.getenv("HOLABOSS_RUNTIME_FLAVOR") or "holaboss").strip().lower()
-    if raw in {"holaboss", "oss"}:
-        return raw
-    return "holaboss"
-
-
 def _selected_harness(*, request: RunnerRequest) -> str:
     harness = (
         _runtime_exec_context_str(request=request, key=_RUNTIME_EXEC_HARNESS_KEY)
-        or (os.getenv("SANDBOX_AGENT_HARNESS") or ("agno" if _runtime_flavor() == "oss" else "opencode")).strip()
+        or (os.getenv("SANDBOX_AGENT_HARNESS") or "opencode").strip()
     ).lower()
     if harness not in _SUPPORTED_HARNESSES:
         allowed = ", ".join(sorted(_SUPPORTED_HARNESSES))
@@ -1991,7 +2028,21 @@ def _opencode_ready_timeout_seconds() -> float:
     return 30.0
 
 
-async def _restart_opencode_sidecar(*, allow_reuse_existing: bool = False) -> None:
+def _opencode_sidecar_fingerprint(*, runtime_config: _OpencodeRuntimeConfig, workspace_id: str) -> str:
+    payload = {
+        "workspace_id": workspace_id,
+        "provider_id": str(getattr(runtime_config, "provider_id", "") or ""),
+        "model_id": str(getattr(runtime_config, "model_id", "") or ""),
+        "mode": str(getattr(runtime_config, "mode", "") or ""),
+        "workspace_skill_ids": list(getattr(runtime_config, "workspace_skill_ids", ()) or ()),
+    }
+    serialized = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+async def _restart_opencode_sidecar(
+    *, allow_reuse_existing: bool = False, config_fingerprint: str = "", workspace_id: str = ""
+) -> None:
     host = _opencode_server_host()
     port = _opencode_server_port()
     process_marker = f"opencode serve --hostname {host} --port {port}"
@@ -2028,8 +2079,18 @@ async def _restart_opencode_sidecar(*, allow_reuse_existing: bool = False) -> No
 
     lock_file = await _acquire_opencode_lock()
     try:
-        if allow_reuse_existing and await _workspace_mcp_is_ready(url=readiness_url):
-            return
+        persisted_state = _read_opencode_sidecar_state()
+        persisted_fingerprint = str(persisted_state.get("config_fingerprint") or "").strip()
+        persisted_pid = int(persisted_state.get("pid") or 0)
+        fingerprint_matches = bool(config_fingerprint) and persisted_fingerprint == config_fingerprint
+
+        if await _workspace_mcp_is_ready(url=readiness_url):
+            if allow_reuse_existing or fingerprint_matches:
+                return
+
+        if persisted_pid and not _workspace_mcp_pid_alive(persisted_pid):
+            _clear_opencode_sidecar_state()
+            persisted_state = {}
 
         running_pids = await _opencode_sidecar_pids()
         for pid in sorted(set(running_pids)):
@@ -2071,11 +2132,20 @@ async def _restart_opencode_sidecar(*, allow_reuse_existing: bool = False) -> No
         except TimeoutError:
             pass
         else:
+            _clear_opencode_sidecar_state()
             raise RuntimeError(f"OpenCode sidecar exited during startup with code {sidecar_process.returncode}")
 
         await _wait_for_opencode_ready(
             url=readiness_url,
             timeout_seconds=_opencode_ready_timeout_seconds(),
+        )
+        _write_opencode_sidecar_state(
+            {
+                "pid": sidecar_process.pid,
+                "url": readiness_url,
+                "workspace_id": workspace_id,
+                "config_fingerprint": config_fingerprint,
+            }
         )
     finally:
         _release_opencode_lock(lock_file=lock_file)
@@ -3957,6 +4027,10 @@ async def _execute_request_opencode(request: RunnerRequest) -> int:
             phase_started_at = time.perf_counter()
             restart_policy = "sandbox_boot"
             should_restart_opencode_sidecar = False
+            opencode_sidecar_fingerprint = _opencode_sidecar_fingerprint(
+                runtime_config=runtime_config,
+                workspace_id=request.workspace_id,
+            )
             if _opencode_restart_each_run_enabled():
                 should_restart_opencode_sidecar = True
                 restart_policy = "each_run_env"
@@ -3970,7 +4044,10 @@ async def _execute_request_opencode(request: RunnerRequest) -> int:
                 restart_policy = "workspace_skills_refresh"
 
             if should_restart_opencode_sidecar:
-                await _restart_opencode_sidecar()
+                await _restart_opencode_sidecar(
+                    config_fingerprint=opencode_sidecar_fingerprint,
+                    workspace_id=request.workspace_id,
+                )
                 _log_phase("restart_opencode_sidecar", phase_started_at, restart_policy=restart_policy)
             else:
                 _log_phase(

@@ -283,7 +283,6 @@ async def test_runtime_config_endpoints_support_oss_direct_provider(
     config_path = sandbox_root / "state" / "runtime-config.json"
     monkeypatch.setenv("HB_SANDBOX_ROOT", str(sandbox_root))
     monkeypatch.setenv("HOLABOSS_RUNTIME_CONFIG_PATH", str(config_path))
-    monkeypatch.setenv("HOLABOSS_RUNTIME_FLAVOR", "oss")
     monkeypatch.delenv("HOLABOSS_SANDBOX_AUTH_TOKEN", raising=False)
     monkeypatch.delenv("HOLABOSS_USER_ID", raising=False)
     monkeypatch.delenv("HOLABOSS_MODEL_PROXY_BASE_URL", raising=False)

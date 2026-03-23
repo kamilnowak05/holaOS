@@ -34,7 +34,9 @@ if (!binaryPath) {
 
 console.log(`[packaged:run] launching: ${binaryPath}`);
 console.log(
-  `[packaged:run] HOLABOSS_DESKTOP_CONTROL_PLANE_BASE_URL=${process.env.HOLABOSS_DESKTOP_CONTROL_PLANE_BASE_URL || "(default)"}`
+  `[packaged:run] HOLABOSS_BACKEND_BASE_URL=${
+    process.env.HOLABOSS_BACKEND_BASE_URL || process.env.HOLABOSS_DESKTOP_CONTROL_PLANE_BASE_URL || "(default)"
+  }`
 );
 console.log(`[packaged:run] HOLABOSS_AUTH_BASE_URL=${process.env.HOLABOSS_AUTH_BASE_URL || "(default)"}`);
 

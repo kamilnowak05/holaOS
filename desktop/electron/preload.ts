@@ -153,37 +153,6 @@ interface TemplateViewInfoPayload {
   description: string;
 }
 
-interface SpotlightItemPayload {
-  label: string;
-  title: string;
-  description: string;
-  template_name: string;
-}
-
-interface TemplateMetadataPayload {
-  name: string;
-  repo: string;
-  path: string;
-  default_ref: string;
-  description: string | null;
-  is_hidden: boolean;
-  is_coming_soon: boolean;
-  allowed_user_ids: string[];
-  icon: string;
-  emoji: string | null;
-  apps: string[];
-  tags: string[];
-  category: string;
-  long_description: string | null;
-  agents: TemplateAgentInfoPayload[];
-  views: TemplateViewInfoPayload[];
-}
-
-interface TemplateListResponsePayload {
-  templates: TemplateMetadataPayload[];
-  spotlight: SpotlightItemPayload[];
-}
-
 interface WorkspaceRecordPayload {
   id: string;
   name: string;
@@ -298,9 +267,14 @@ interface HolabossClientConfigPayload {
 interface HolabossCreateWorkspacePayload {
   holaboss_user_id: string;
   name: string;
-  template_name: string;
-  template_ref?: string | null;
-  template_commit?: string | null;
+  template_root_path: string;
+}
+
+interface TemplateFolderSelectionPayload {
+  canceled: boolean;
+  rootPath: string | null;
+  templateName: string | null;
+  description: string | null;
 }
 
 interface HolabossQueueSessionInputPayload {
@@ -385,35 +359,35 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ui: {
     setTheme: (theme: string) => ipcRenderer.invoke("ui:setTheme", theme) as Promise<void>
   },
-  holaboss: {
-    getClientConfig: () => ipcRenderer.invoke("holaboss:getClientConfig") as Promise<HolabossClientConfigPayload>,
-    listTemplates: (includeHidden = false) =>
-      ipcRenderer.invoke("holaboss:listTemplates", includeHidden) as Promise<TemplateListResponsePayload>,
-    listWorkspaces: () => ipcRenderer.invoke("holaboss:listWorkspaces") as Promise<WorkspaceListResponsePayload>,
-    getWorkspaceRoot: (workspaceId: string) => ipcRenderer.invoke("holaboss:getWorkspaceRoot", workspaceId) as Promise<string>,
+  workspace: {
+    getClientConfig: () => ipcRenderer.invoke("workspace:getClientConfig") as Promise<HolabossClientConfigPayload>,
+    pickTemplateFolder: () =>
+      ipcRenderer.invoke("workspace:pickTemplateFolder") as Promise<TemplateFolderSelectionPayload>,
+    listWorkspaces: () => ipcRenderer.invoke("workspace:listWorkspaces") as Promise<WorkspaceListResponsePayload>,
+    getWorkspaceRoot: (workspaceId: string) => ipcRenderer.invoke("workspace:getWorkspaceRoot", workspaceId) as Promise<string>,
     createWorkspace: (payload: HolabossCreateWorkspacePayload) =>
-      ipcRenderer.invoke("holaboss:createWorkspace", payload) as Promise<WorkspaceResponsePayload>,
+      ipcRenderer.invoke("workspace:createWorkspace", payload) as Promise<WorkspaceResponsePayload>,
     listTaskProposals: (workspaceId: string) =>
-      ipcRenderer.invoke("holaboss:listTaskProposals", workspaceId) as Promise<TaskProposalListResponsePayload>,
+      ipcRenderer.invoke("workspace:listTaskProposals", workspaceId) as Promise<TaskProposalListResponsePayload>,
     enqueueRemoteDemoTaskProposal: (payload: DemoTaskProposalRequestPayload) =>
-      ipcRenderer.invoke("holaboss:enqueueRemoteDemoTaskProposal", payload) as Promise<DemoTaskProposalEnqueueResponsePayload>,
+      ipcRenderer.invoke("workspace:enqueueRemoteDemoTaskProposal", payload) as Promise<DemoTaskProposalEnqueueResponsePayload>,
     listRuntimeStates: (workspaceId: string) =>
-      ipcRenderer.invoke("holaboss:listRuntimeStates", workspaceId) as Promise<SessionRuntimeStateListResponsePayload>,
+      ipcRenderer.invoke("workspace:listRuntimeStates", workspaceId) as Promise<SessionRuntimeStateListResponsePayload>,
     getSessionHistory: (payload: { sessionId: string; workspaceId: string }) =>
-      ipcRenderer.invoke("holaboss:getSessionHistory", payload) as Promise<SessionHistoryResponsePayload>,
+      ipcRenderer.invoke("workspace:getSessionHistory", payload) as Promise<SessionHistoryResponsePayload>,
     queueSessionInput: (payload: HolabossQueueSessionInputPayload) =>
-      ipcRenderer.invoke("holaboss:queueSessionInput", payload) as Promise<EnqueueSessionInputResponsePayload>,
+      ipcRenderer.invoke("workspace:queueSessionInput", payload) as Promise<EnqueueSessionInputResponsePayload>,
     openSessionOutputStream: (payload: HolabossStreamSessionOutputsPayload) =>
-      ipcRenderer.invoke("holaboss:openSessionOutputStream", payload) as Promise<HolabossSessionStreamHandlePayload>,
+      ipcRenderer.invoke("workspace:openSessionOutputStream", payload) as Promise<HolabossSessionStreamHandlePayload>,
     closeSessionOutputStream: (streamId: string, reason?: string) =>
-      ipcRenderer.invoke("holaboss:closeSessionOutputStream", streamId, reason) as Promise<void>,
+      ipcRenderer.invoke("workspace:closeSessionOutputStream", streamId, reason) as Promise<void>,
     getSessionStreamDebug: () =>
-      ipcRenderer.invoke("holaboss:getSessionStreamDebug") as Promise<HolabossSessionStreamDebugEntry[]>,
-    isVerboseTelemetryEnabled: () => ipcRenderer.invoke("holaboss:isVerboseTelemetryEnabled") as Promise<boolean>,
+      ipcRenderer.invoke("workspace:getSessionStreamDebug") as Promise<HolabossSessionStreamDebugEntry[]>,
+    isVerboseTelemetryEnabled: () => ipcRenderer.invoke("workspace:isVerboseTelemetryEnabled") as Promise<boolean>,
     onSessionStreamEvent: (listener: (payload: HolabossSessionStreamEventPayload) => void) => {
       const wrapped = (_event: Electron.IpcRendererEvent, payload: HolabossSessionStreamEventPayload) => listener(payload);
-      ipcRenderer.on("holaboss:sessionStream", wrapped);
-      return () => ipcRenderer.removeListener("holaboss:sessionStream", wrapped);
+      ipcRenderer.on("workspace:sessionStream", wrapped);
+      return () => ipcRenderer.removeListener("workspace:sessionStream", wrapped);
     }
   },
   auth: {

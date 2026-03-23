@@ -1,7 +1,8 @@
+import "dotenv/config";
 import { electronClient } from "@better-auth/electron/client";
 import { storage as electronAuthStorage } from "@better-auth/electron/storage";
 import { createAuthClient } from "better-auth/client";
-import { app, BrowserView, BrowserWindow, DownloadItem, ipcMain, screen, session, shell } from "electron";
+import { app, BrowserView, BrowserWindow, DownloadItem, dialog, ipcMain, screen, session, shell, type OpenDialogOptions } from "electron";
 import Database from "better-sqlite3";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -240,11 +241,32 @@ const DESKTOP_USER_DATA_DIR = (process.env.HOLABOSS_DESKTOP_USER_DATA_DIR?.trim(
   "_"
 );
 const normalizeBaseUrl = (value: string): string => value.trim().replace(/\/+$/, "");
-const AUTH_BASE_URL = (process.env.HOLABOSS_AUTH_BASE_URL?.trim() || "https://api.imerchstaging.com").replace(/\/+$/, "");
-const DESKTOP_CONTROL_PLANE_BASE_URL = normalizeBaseUrl(
-  process.env.HOLABOSS_DESKTOP_CONTROL_PLANE_BASE_URL?.trim() || "http://127.0.0.1:3060"
-);
-const AUTH_SIGN_IN_URL = "https://app.imerchstaging.com/signin";
+const INTERNAL_DEV_BACKEND_OVERRIDES_ENABLED =
+  Boolean(process.env.VITE_DEV_SERVER_URL) || process.env.HOLABOSS_INTERNAL_DEV?.trim() === "1";
+function internalOverride(envName: string): string {
+  if (!INTERNAL_DEV_BACKEND_OVERRIDES_ENABLED) {
+    return "";
+  }
+  return process.env[envName]?.trim() || "";
+}
+function publicRuntimeEnv(envName: string): string {
+  return process.env[envName]?.trim() || "";
+}
+function configuredRemoteBaseUrl(...envNames: string[]): string {
+  for (const envName of envNames) {
+    const value = normalizeBaseUrl(internalOverride(envName) || publicRuntimeEnv(envName));
+    if (value) {
+      return value;
+    }
+  }
+  return "";
+}
+const AUTH_BASE_URL = configuredRemoteBaseUrl("HOLABOSS_AUTH_BASE_URL");
+const BACKEND_BASE_URL = configuredRemoteBaseUrl("HOLABOSS_BACKEND_BASE_URL");
+const DESKTOP_CONTROL_PLANE_BASE_URL =
+  serviceBaseUrlFromControlPlane(BACKEND_BASE_URL, 3060) ||
+  configuredRemoteBaseUrl("HOLABOSS_DESKTOP_CONTROL_PLANE_BASE_URL");
+const AUTH_SIGN_IN_URL = configuredRemoteBaseUrl("HOLABOSS_AUTH_SIGN_IN_URL");
 const DESKTOP_RUNTIME_BINDING_EXCHANGE_PATH = "/api/v1/desktop-runtime/bindings/exchange";
 const AUTH_CALLBACK_PROTOCOL = "ai.holaboss.app";
 const LOCAL_RUNTIME_SCHEMA_VERSION = 1;
@@ -258,38 +280,40 @@ function configureStableUserDataPath() {
   }
 }
 
-configureStableUserDataPath();
-
 function serviceBaseUrlFromControlPlane(
   controlPlaneBaseUrl: string,
-  port: number,
-  fallbackUrl: string
+  port: number
 ): string {
   try {
     const parsed = new URL(controlPlaneBaseUrl);
     const protocol = parsed.protocol || "http:";
     const hostname = parsed.hostname;
     if (!hostname) {
-      return fallbackUrl;
+      return "";
     }
     return `${protocol}//${hostname}:${port}`;
   } catch {
-    return fallbackUrl;
+    return "";
   }
 }
 
-const desktopAuthClient = createAuthClient({
-  baseURL: AUTH_BASE_URL,
-  plugins: [
-    electronClient({
-      signInURL: AUTH_SIGN_IN_URL,
-      protocol: {
-        scheme: AUTH_CALLBACK_PROTOCOL
-      },
-      storage: electronAuthStorage()
-    })
-  ]
-});
+configureStableUserDataPath();
+
+const desktopAuthClient =
+  AUTH_BASE_URL && AUTH_SIGN_IN_URL
+    ? createAuthClient({
+        baseURL: AUTH_BASE_URL,
+        plugins: [
+          electronClient({
+            signInURL: AUTH_SIGN_IN_URL,
+            protocol: {
+              scheme: AUTH_CALLBACK_PROTOCOL
+            },
+            storage: electronAuthStorage()
+          })
+        ]
+      })
+    : null;
 
 interface RuntimeBindingExchangePayload {
   sandbox_id: string;
@@ -556,13 +580,6 @@ interface TemplateViewInfoPayload {
   description: string;
 }
 
-interface SpotlightItemPayload {
-  label: string;
-  title: string;
-  description: string;
-  template_name: string;
-}
-
 interface TemplateMetadataPayload {
   name: string;
   repo: string;
@@ -580,11 +597,6 @@ interface TemplateMetadataPayload {
   long_description: string | null;
   agents: TemplateAgentInfoPayload[];
   views: TemplateViewInfoPayload[];
-}
-
-interface TemplateListResponsePayload {
-  templates: TemplateMetadataPayload[];
-  spotlight: SpotlightItemPayload[];
 }
 
 interface ResolvedTemplatePayload {
@@ -607,11 +619,6 @@ interface MaterializeTemplateResponsePayload {
   files: MaterializedTemplateFilePayload[];
   file_count: number;
   total_bytes: number;
-}
-
-interface LocalTemplateDescriptor {
-  rootPath: string;
-  metadata: TemplateMetadataPayload;
 }
 
 interface WorkspaceRecordPayload {
@@ -728,9 +735,14 @@ interface HolabossClientConfigPayload {
 interface HolabossCreateWorkspacePayload {
   holaboss_user_id: string;
   name: string;
-  template_name: string;
-  template_ref?: string | null;
-  template_commit?: string | null;
+  template_root_path: string;
+}
+
+interface TemplateFolderSelectionPayload {
+  canceled: boolean;
+  rootPath: string | null;
+  templateName: string | null;
+  description: string | null;
 }
 
 interface HolabossQueueSessionInputPayload {
@@ -774,17 +786,17 @@ interface HolabossSessionStreamDebugEntry {
 }
 
 const DEFAULT_PROJECTS_URL =
-  process.env.HOLABOSS_PROJECTS_URL?.trim() ||
-  process.env.HOLABOSS_CLI_PROJECTS_URL?.trim() ||
-  serviceBaseUrlFromControlPlane(DESKTOP_CONTROL_PLANE_BASE_URL, 3033, "http://localhost:3033");
+  internalOverride("HOLABOSS_PROJECTS_URL") ||
+  internalOverride("HOLABOSS_CLI_PROJECTS_URL") ||
+  serviceBaseUrlFromControlPlane(DESKTOP_CONTROL_PLANE_BASE_URL, 3033);
 const DEFAULT_MARKETPLACE_URL =
-  process.env.HOLABOSS_MARKETPLACE_URL?.trim() ||
-  process.env.HOLABOSS_CLI_MARKETPLACE_URL?.trim() ||
-  serviceBaseUrlFromControlPlane(DESKTOP_CONTROL_PLANE_BASE_URL, 3037, "http://localhost:3037");
+  internalOverride("HOLABOSS_MARKETPLACE_URL") ||
+  internalOverride("HOLABOSS_CLI_MARKETPLACE_URL") ||
+  serviceBaseUrlFromControlPlane(DESKTOP_CONTROL_PLANE_BASE_URL, 3037);
 const DEFAULT_PROACTIVE_URL =
-  process.env.HOLABOSS_PROACTIVE_URL?.trim() ||
-  process.env.HOLABOSS_CLI_PROACTIVE_URL?.trim() ||
-  serviceBaseUrlFromControlPlane(DESKTOP_CONTROL_PLANE_BASE_URL, 3032, "http://localhost:3032");
+  internalOverride("HOLABOSS_PROACTIVE_URL") ||
+  internalOverride("HOLABOSS_CLI_PROACTIVE_URL") ||
+  serviceBaseUrlFromControlPlane(DESKTOP_CONTROL_PLANE_BASE_URL, 3032);
 
 const sessionOutputStreams = new Map<string, AbortController>();
 const sessionStreamDebugLog: HolabossSessionStreamDebugEntry[] = [];
@@ -850,39 +862,6 @@ function runtimeWorkspaceRoot() {
 
 function utcNowIso() {
   return new Date().toISOString();
-}
-
-function runtimeFlavor() {
-  return (process.env.HOLABOSS_RUNTIME_FLAVOR?.trim() || "holaboss").toLowerCase();
-}
-
-function isOssRuntimeFlavor() {
-  return runtimeFlavor() === "oss";
-}
-
-function candidateLocalTemplatesRoots() {
-  const explicit = process.env.HOLABOSS_LOCAL_TEMPLATES_ROOT?.trim();
-  const candidates = [
-    explicit,
-    path.resolve(process.cwd(), "..", "hola-boss-templates", "templates"),
-    path.resolve(process.cwd(), "templates"),
-    path.resolve(app.getAppPath(), "..", "hola-boss-templates", "templates"),
-    path.resolve(app.getAppPath(), "templates"),
-    path.resolve(app.getAppPath(), "runtime-templates"),
-    isDev ? path.resolve(app.getAppPath(), "..", "hola-boss-templates", "templates") : undefined,
-  ];
-  return candidates.filter((value): value is string => Boolean(value && value.trim()));
-}
-
-function resolveLocalTemplatesRoot() {
-  for (const candidate of candidateLocalTemplatesRoots()) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  throw new Error(
-    "Local template registry not found. Set HOLABOSS_LOCAL_TEMPLATES_ROOT or place hola-boss-templates/templates next to hola-boss-desktop."
-  );
 }
 
 function openRuntimeDatabase() {
@@ -961,18 +940,76 @@ function migrateLocalWorkspacesTable(database: Database.Database) {
   `);
 }
 
+function migrateRuntimeInstallationStateTable(database: Database.Database) {
+  const tableInfo = database
+    .prepare("PRAGMA table_info(runtime_installation_state)")
+    .all() as Array<{ name: string }>;
+  if (!tableInfo.length) {
+    return;
+  }
+
+  const columns = new Set(tableInfo.map((column) => column.name));
+  if (!columns.has("runtime_flavor")) {
+    return;
+  }
+
+  database.exec(`
+    ALTER TABLE runtime_installation_state RENAME TO runtime_installation_state_legacy;
+
+    CREATE TABLE runtime_installation_state (
+      installation_key TEXT PRIMARY KEY,
+      schema_version INTEGER NOT NULL,
+      runtime_root TEXT,
+      runtime_platform TEXT NOT NULL,
+      runtime_bundle_version TEXT,
+      runtime_bundle_commit TEXT,
+      bootstrap_status TEXT NOT NULL,
+      bootstrap_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    INSERT INTO runtime_installation_state (
+      installation_key,
+      schema_version,
+      runtime_root,
+      runtime_platform,
+      runtime_bundle_version,
+      runtime_bundle_commit,
+      bootstrap_status,
+      bootstrap_error,
+      created_at,
+      updated_at
+    )
+    SELECT
+      installation_key,
+      schema_version,
+      runtime_root,
+      runtime_platform,
+      runtime_bundle_version,
+      runtime_bundle_commit,
+      bootstrap_status,
+      bootstrap_error,
+      created_at,
+      updated_at
+    FROM runtime_installation_state_legacy;
+
+    DROP TABLE runtime_installation_state_legacy;
+  `);
+}
+
 async function bootstrapRuntimeDatabase() {
   await fs.mkdir(path.dirname(runtimeDatabasePath()), { recursive: true });
 
   const database = openRuntimeDatabase();
   try {
     migrateLocalWorkspacesTable(database);
+    migrateRuntimeInstallationStateTable(database);
     database.exec(`
       CREATE TABLE IF NOT EXISTS runtime_installation_state (
         installation_key TEXT PRIMARY KEY,
         schema_version INTEGER NOT NULL,
         runtime_root TEXT,
-        runtime_flavor TEXT NOT NULL,
         runtime_platform TEXT NOT NULL,
         runtime_bundle_version TEXT,
         runtime_bundle_commit TEXT,
@@ -1139,7 +1176,6 @@ async function bootstrapRuntimeDatabase() {
           installation_key,
           schema_version,
           runtime_root,
-          runtime_flavor,
           runtime_platform,
           runtime_bundle_version,
           runtime_bundle_commit,
@@ -1151,7 +1187,6 @@ async function bootstrapRuntimeDatabase() {
           @installation_key,
           @schema_version,
           @runtime_root,
-          @runtime_flavor,
           @runtime_platform,
           @runtime_bundle_version,
           @runtime_bundle_commit,
@@ -1163,7 +1198,6 @@ async function bootstrapRuntimeDatabase() {
         ON CONFLICT(installation_key) DO UPDATE SET
           schema_version = excluded.schema_version,
           runtime_root = excluded.runtime_root,
-          runtime_flavor = excluded.runtime_flavor,
           runtime_platform = excluded.runtime_platform,
           runtime_bundle_version = excluded.runtime_bundle_version,
           runtime_bundle_commit = excluded.runtime_bundle_commit,
@@ -1175,7 +1209,6 @@ async function bootstrapRuntimeDatabase() {
         installation_key: "desktop-runtime",
         schema_version: LOCAL_RUNTIME_SCHEMA_VERSION,
         runtime_root: runtimeRoot,
-        runtime_flavor: process.env.HOLABOSS_RUNTIME_FLAVOR?.trim() || "holaboss",
         runtime_platform: process.platform,
         runtime_bundle_version: typeof manifest.releaseTag === "string" ? manifest.releaseTag : null,
         runtime_bundle_commit: typeof manifest.sourceCommit === "string" ? manifest.sourceCommit : null,
@@ -1470,12 +1503,13 @@ async function getRuntimeConfig(): Promise<RuntimeConfigPayload> {
 }
 
 async function exchangeDesktopRuntimeBinding(sandboxId: string): Promise<RuntimeBindingExchangePayload> {
+  const controlPlaneBaseUrl = requireControlPlaneBaseUrl();
   const cookieHeader = authCookieHeader();
   if (!cookieHeader) {
     throw new Error("Better Auth session cookies are missing.");
   }
 
-  const response = await fetch(`${DESKTOP_CONTROL_PLANE_BASE_URL}${DESKTOP_RUNTIME_BINDING_EXCHANGE_PATH}`, {
+  const response = await fetch(`${controlPlaneBaseUrl}${DESKTOP_RUNTIME_BINDING_EXCHANGE_PATH}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1583,6 +1617,10 @@ function clearPersistedAuthCookie() {
 }
 
 function authCookieHeader() {
+  if (!desktopAuthClient) {
+    return "";
+  }
+
   const isUsableCookieHeader = (value: string) => {
     const normalized = value.trim();
     if (!normalized) {
@@ -1595,7 +1633,7 @@ function authCookieHeader() {
   };
 
   const readCookieOrThrow = () => {
-    const cookie = desktopAuthClient.getCookie() || "";
+    const cookie = requireAuthClient().getCookie() || "";
     if (!isUsableCookieHeader(cookie)) {
       throw new Error("Better Auth cookie is missing or invalid.");
     }
@@ -1627,7 +1665,29 @@ function authCookieHeader() {
   }
 }
 
+function requireAuthClient() {
+  if (!desktopAuthClient) {
+    throw new Error(
+      "Remote authentication is not configured. Set HOLABOSS_AUTH_BASE_URL and HOLABOSS_AUTH_SIGN_IN_URL outside the public repo."
+    );
+  }
+  return desktopAuthClient;
+}
+
+function requireControlPlaneBaseUrl() {
+  if (!DESKTOP_CONTROL_PLANE_BASE_URL) {
+    throw new Error(
+      "Remote backend is not configured. Set HOLABOSS_BACKEND_BASE_URL outside the public repo."
+    );
+  }
+  return DESKTOP_CONTROL_PLANE_BASE_URL;
+}
+
 async function getAuthenticatedUser(): Promise<AuthUserPayload | null> {
+  if (!AUTH_BASE_URL) {
+    return null;
+  }
+
   const cookieHeader = authCookieHeader();
   if (!cookieHeader) {
     return null;
@@ -1889,7 +1949,7 @@ async function handleAuthCallbackUrl(targetUrl: string) {
   }
 
   try {
-    const result = await desktopAuthClient.authenticate({ token });
+    const result = await requireAuthClient().authenticate({ token });
     const user = (result.data?.user ?? null) as AuthUserPayload | null;
     if (user) {
       emitAuthAuthenticated(user);
@@ -2093,15 +2153,6 @@ function getHolabossClientConfig(): HolabossClientConfigPayload {
   };
 }
 
-async function listMarketplaceTemplates(includeHidden = false): Promise<TemplateListResponsePayload> {
-  return requestControlPlaneJson<TemplateListResponsePayload>({
-    service: "marketplace",
-    method: "GET",
-    path: "/api/v1/marketplace/templates",
-    params: { include_hidden: includeHidden }
-  });
-}
-
 function firstNonEmptyLine(content: string): string | null {
   for (const line of content.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -2159,27 +2210,6 @@ async function parseLocalTemplateMetadata(templateRoot: string): Promise<Templat
   };
 }
 
-async function listLocalTemplates(): Promise<TemplateListResponsePayload> {
-  const templatesRoot = resolveLocalTemplatesRoot();
-  const entries = await fs.readdir(templatesRoot, { withFileTypes: true });
-  const templates = (
-    await Promise.all(
-      entries
-        .filter((entry) => entry.isDirectory())
-        .map(async (entry) => {
-          const templateRoot = path.join(templatesRoot, entry.name);
-          const workspaceYamlPath = path.join(templateRoot, "workspace.yaml");
-          if (!existsSync(workspaceYamlPath)) {
-            return null;
-          }
-          return parseLocalTemplateMetadata(templateRoot);
-        })
-    )
-  ).filter((item): item is TemplateMetadataPayload => item !== null);
-
-  return { templates, spotlight: [] };
-}
-
 async function listTaskProposals(workspaceId: string): Promise<TaskProposalListResponsePayload> {
   return requestRuntimeJson<TaskProposalListResponsePayload>({
     method: "GET",
@@ -2195,20 +2225,6 @@ async function enqueueRemoteDemoTaskProposal(
     service: "proactive",
     method: "POST",
     path: "/api/v1/proactive/bridge/demo/task-proposal",
-    payload
-  });
-}
-
-async function materializeMarketplaceTemplate(payload: {
-  holaboss_user_id: string;
-  template_name: string;
-  template_ref?: string | null;
-  template_commit?: string | null;
-}): Promise<MaterializeTemplateResponsePayload> {
-  return requestControlPlaneJson<MaterializeTemplateResponsePayload>({
-    service: "marketplace",
-    method: "POST",
-    path: "/api/v1/marketplace/templates/materialize",
     payload
   });
 }
@@ -2241,15 +2257,15 @@ async function collectLocalTemplateFiles(templateRoot: string): Promise<Material
 }
 
 async function materializeLocalTemplate(payload: {
-  template_name: string;
+  template_root_path: string;
 }): Promise<MaterializeTemplateResponsePayload> {
-  const templatesRoot = resolveLocalTemplatesRoot();
-  const templateRoot = path.join(templatesRoot, payload.template_name);
+  const templateRoot = path.resolve(payload.template_root_path);
   const workspaceYamlPath = path.join(templateRoot, "workspace.yaml");
   if (!existsSync(workspaceYamlPath)) {
-    throw new Error(`Local template '${payload.template_name}' not found.`);
+    throw new Error(`Template folder '${templateRoot}' is missing workspace.yaml.`);
   }
 
+  const metadata = await parseLocalTemplateMetadata(templateRoot);
   const files = await collectLocalTemplateFiles(templateRoot);
   const totalBytes = files.reduce(
     (sum, file) => sum + Buffer.byteLength(file.content_base64, "base64"),
@@ -2257,16 +2273,48 @@ async function materializeLocalTemplate(payload: {
   );
   return {
     template: {
-      name: payload.template_name,
+      name: metadata.name,
       repo: "local",
-      path: payload.template_name,
+      path: templateRoot,
       effective_ref: "local",
       effective_commit: null,
-      source: "local_registry",
+      source: "template_folder",
     },
     files,
     file_count: files.length,
     total_bytes: totalBytes,
+  };
+}
+
+async function pickTemplateFolder(): Promise<TemplateFolderSelectionPayload> {
+  const ownerWindow = mainWindow ?? BrowserWindow.getFocusedWindow() ?? null;
+  const options: OpenDialogOptions = {
+    properties: ["openDirectory", "createDirectory"],
+    title: "Choose Template Folder",
+    buttonLabel: "Use Template Folder"
+  };
+  const result = ownerWindow ? await dialog.showOpenDialog(ownerWindow, options) : await dialog.showOpenDialog(options);
+  if (result.canceled || !result.filePaths[0]) {
+    return {
+      canceled: true,
+      rootPath: null,
+      templateName: null,
+      description: null
+    };
+  }
+
+  const rootPath = path.resolve(result.filePaths[0]);
+  const workspaceYamlPath = path.join(rootPath, "workspace.yaml");
+  if (!existsSync(workspaceYamlPath)) {
+    throw new Error("Selected folder must contain a workspace.yaml file.");
+  }
+
+  const metadata = await parseLocalTemplateMetadata(rootPath);
+  return {
+    canceled: false,
+    rootPath,
+    templateName: metadata.name,
+    description: metadata.description
   };
 }
 
@@ -2688,9 +2736,7 @@ async function createWorkspace(payload: HolabossCreateWorkspacePayload): Promise
   const runtime = await ensureRuntimeReady();
   const mainSessionId = crypto.randomUUID();
   const harness = workspaceHarness();
-  const materializedTemplate = isOssRuntimeFlavor()
-    ? await materializeLocalTemplate({ template_name: payload.template_name })
-    : await materializeMarketplaceTemplate(payload);
+  const materializedTemplate = await materializeLocalTemplate({ template_root_path: payload.template_root_path });
   const resolvedTemplate = materializedTemplate.template;
   const created = await requestRuntimeJson<WorkspaceResponsePayload>({
     method: "POST",
@@ -2901,7 +2947,7 @@ function emitSessionStreamEvent(payload: HolabossSessionStreamEventPayload) {
   }
   for (const win of windows) {
     try {
-      win.webContents.send("holaboss:sessionStream", payload);
+      win.webContents.send("workspace:sessionStream", payload);
     } catch (error) {
       appendSessionStreamDebug(
         payload.streamId,
@@ -5961,10 +6007,10 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("auth:getUser", async () => getAuthenticatedUser());
   ipcMain.handle("auth:requestAuth", async () => {
-    await desktopAuthClient.requestAuth();
+    await requireAuthClient().requestAuth();
   });
   ipcMain.handle("auth:signOut", async () => {
-    await desktopAuthClient.signOut();
+    await requireAuthClient().signOut();
     const runtimeConfig = await readRuntimeConfigFile();
     if (runtimeConfigIsControlPlaneManaged(runtimeConfig) && runtimeModelProxyApiKeyFromConfig(runtimeConfig)) {
       await clearRuntimeBindingSecrets("auth_sign_out");
@@ -6016,34 +6062,32 @@ app.whenReady().then(async () => {
     await restartEmbeddedRuntimeIfNeeded(currentConfig, nextConfig);
     return getRuntimeConfig();
   });
-  ipcMain.handle("holaboss:getClientConfig", () => getHolabossClientConfig());
-  ipcMain.handle("holaboss:listTemplates", async (_event, includeHidden?: boolean) =>
-    isOssRuntimeFlavor() ? listLocalTemplates() : listMarketplaceTemplates(Boolean(includeHidden))
-  );
-  ipcMain.handle("holaboss:listWorkspaces", async () => listWorkspaces());
-  ipcMain.handle("holaboss:getWorkspaceRoot", async (_event, workspaceId: string) => workspaceDirectoryPath(workspaceId));
-  ipcMain.handle("holaboss:createWorkspace", async (_event, payload: HolabossCreateWorkspacePayload) => createWorkspace(payload));
-  ipcMain.handle("holaboss:listTaskProposals", async (_event, workspaceId: string) => listTaskProposals(workspaceId));
-  ipcMain.handle("holaboss:enqueueRemoteDemoTaskProposal", async (_event, payload: DemoTaskProposalRequestPayload) =>
+  ipcMain.handle("workspace:getClientConfig", () => getHolabossClientConfig());
+  ipcMain.handle("workspace:pickTemplateFolder", async () => pickTemplateFolder());
+  ipcMain.handle("workspace:listWorkspaces", async () => listWorkspaces());
+  ipcMain.handle("workspace:getWorkspaceRoot", async (_event, workspaceId: string) => workspaceDirectoryPath(workspaceId));
+  ipcMain.handle("workspace:createWorkspace", async (_event, payload: HolabossCreateWorkspacePayload) => createWorkspace(payload));
+  ipcMain.handle("workspace:listTaskProposals", async (_event, workspaceId: string) => listTaskProposals(workspaceId));
+  ipcMain.handle("workspace:enqueueRemoteDemoTaskProposal", async (_event, payload: DemoTaskProposalRequestPayload) =>
     enqueueRemoteDemoTaskProposal(payload)
   );
-  ipcMain.handle("holaboss:listRuntimeStates", async (_event, workspaceId: string) => listRuntimeStates(workspaceId));
-  ipcMain.handle("holaboss:getSessionHistory", async (_event, payload: { sessionId: string; workspaceId: string }) =>
+  ipcMain.handle("workspace:listRuntimeStates", async (_event, workspaceId: string) => listRuntimeStates(workspaceId));
+  ipcMain.handle("workspace:getSessionHistory", async (_event, payload: { sessionId: string; workspaceId: string }) =>
     getSessionHistory(payload.sessionId, payload.workspaceId)
   );
-  ipcMain.handle("holaboss:queueSessionInput", async (_event, payload: HolabossQueueSessionInputPayload) =>
+  ipcMain.handle("workspace:queueSessionInput", async (_event, payload: HolabossQueueSessionInputPayload) =>
     queueSessionInput(payload)
   );
-  ipcMain.handle("holaboss:openSessionOutputStream", async (_event, payload: HolabossStreamSessionOutputsPayload) =>
+  ipcMain.handle("workspace:openSessionOutputStream", async (_event, payload: HolabossStreamSessionOutputsPayload) =>
     openSessionOutputStream(payload)
   );
-  ipcMain.handle("holaboss:closeSessionOutputStream", async (_event, streamId: string, reason?: string) =>
+  ipcMain.handle("workspace:closeSessionOutputStream", async (_event, streamId: string, reason?: string) =>
     closeSessionOutputStream(streamId, reason)
   );
-  ipcMain.handle("holaboss:getSessionStreamDebug", async () =>
+  ipcMain.handle("workspace:getSessionStreamDebug", async () =>
     verboseTelemetryEnabled ? sessionStreamDebugLog.slice(-600) : []
   );
-  ipcMain.handle("holaboss:isVerboseTelemetryEnabled", async () => verboseTelemetryEnabled);
+  ipcMain.handle("workspace:isVerboseTelemetryEnabled", async () => verboseTelemetryEnabled);
   ipcMain.handle("browser:getState", () => {
     ensureBrowserTabs();
     return getBrowserTabsSnapshot();

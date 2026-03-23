@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from typing import Any
 
@@ -15,19 +14,6 @@ from sandbox_agent_runtime.memory.operations import (
     memory_upsert,
 )
 from sandbox_agent_runtime.product_config import resolve_product_runtime_config
-
-_HOLABOSS_RUNTIME_FLAVORS = frozenset({"holaboss", "oss"})
-
-
-def _runtime_flavor() -> str:
-    raw = (os.getenv("HOLABOSS_RUNTIME_FLAVOR") or "holaboss").strip().lower()
-    if raw in _HOLABOSS_RUNTIME_FLAVORS:
-        return raw
-    return "holaboss"
-
-
-def _holaboss_features_enabled() -> bool:
-    return _runtime_flavor() != "oss"
 
 
 _ALLOWED_DELIVERY_CHANNELS = hb_workflow_extensions._ALLOWED_DELIVERY_CHANNELS
@@ -80,16 +66,15 @@ def _cmd_memory_sync(args: argparse.Namespace) -> dict[str, Any]:
 
 def _cmd_runtime_info(args: argparse.Namespace) -> dict[str, Any]:
     del args
-    flavor = _runtime_flavor()
     config = resolve_product_runtime_config(
         require_auth=False,
         require_user=False,
         require_base_url=False,
     )
     return {
-        "runtime_flavor": flavor,
-        "holaboss_features_enabled": _holaboss_features_enabled(),
-        "default_harness": "agno" if flavor == "oss" else "opencode",
+        "runtime_mode": config.runtime_mode,
+        "holaboss_features_enabled": config.holaboss_enabled,
+        "default_harness": "opencode",
         "workflow_backend": _workflow_backend(),
         "runtime_config_path": config.config_path,
         "runtime_config_loaded": config.loaded_from_file,

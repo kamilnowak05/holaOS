@@ -540,8 +540,6 @@ def _selected_harness() -> str:
     configured = (os.getenv("SANDBOX_AGENT_HARNESS") or "").strip().lower()
     if configured:
         return configured
-    if (os.getenv("HOLABOSS_RUNTIME_FLAVOR") or "holaboss").strip().lower() == "oss":
-        return "agno"
     return "opencode"
 
 

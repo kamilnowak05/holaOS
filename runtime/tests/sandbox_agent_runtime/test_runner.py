@@ -21,6 +21,7 @@ from sandbox_agent_runtime.runner import (
     _execute_request,
     _map_opencode_event,
     _model_proxy_base_root_url,
+    _restart_opencode_sidecar,
     _opencode_provider_config_payload,
     _resolve_agno_model_id,
     _resolve_model_client_config,
@@ -114,9 +115,8 @@ def _workspace_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sandbox_agent_runtime.runner.WORKSPACE_ROOT", str(workspace_root))
 
 
-def test_selected_harness_defaults_to_agno_for_oss_flavor(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_selected_harness_defaults_to_opencode_without_explicit_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SANDBOX_AGENT_HARNESS", raising=False)
-    monkeypatch.setenv("HOLABOSS_RUNTIME_FLAVOR", "oss")
 
     request = RunnerRequest(
         holaboss_user_id="user-1",
@@ -127,7 +127,7 @@ def test_selected_harness_defaults_to_agno_for_oss_flavor(monkeypatch: pytest.Mo
         context={},
     )
 
-    assert _selected_harness(request=request) == "agno"
+    assert _selected_harness(request=request) == "opencode"
 
 
 def test_model_proxy_base_root_url_accepts_product_base_url_alias(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -162,6 +162,30 @@ def test_opencode_base_url_prefers_explicit_env(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("OPENCODE_SERVER_PORT", "5096")
 
     assert runner_module._opencode_base_url() == "http://127.0.0.1:4096"
+
+
+@pytest.mark.asyncio
+async def test_restart_opencode_sidecar_reuses_matching_healthy_sidecar(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner_module._write_opencode_sidecar_state(
+        {
+            "pid": 12345,
+            "url": "http://127.0.0.1:4096/mcp",
+            "workspace_id": "workspace-1",
+            "config_fingerprint": "fingerprint-1",
+        }
+    )
+
+    async def _fake_ready(*, url: str) -> bool:
+        assert url == "http://127.0.0.1:4096/mcp"
+        return True
+
+    async def _unexpected_subprocess_exec(*args, **kwargs):
+        raise AssertionError(f"unexpected subprocess restart: args={args} kwargs={kwargs}")
+
+    monkeypatch.setattr("sandbox_agent_runtime.runner._workspace_mcp_is_ready", _fake_ready)
+    monkeypatch.setattr("sandbox_agent_runtime.runner.asyncio.create_subprocess_exec", _unexpected_subprocess_exec)
+
+    await _restart_opencode_sidecar(config_fingerprint="fingerprint-1", workspace_id="workspace-1")
 
 
 def test_workspace_mcp_failure_detail_includes_stderr_and_stdout_tails(
@@ -536,11 +560,10 @@ def test_resolve_model_client_config_uses_direct_openai_fallback_when_enabled(
     assert config.default_headers is None
 
 
-def test_resolve_model_client_config_uses_direct_openai_fallback_for_oss_flavor(
+def test_resolve_model_client_config_uses_direct_openai_fallback_without_product_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("SANDBOX_MODEL_PROXY_ENABLE_DIRECT_OPENAI_FALLBACK", raising=False)
-    monkeypatch.setenv("HOLABOSS_RUNTIME_FLAVOR", "oss")
     monkeypatch.setenv("OPENAI_API_KEY", "direct-openai-key")
 
     request = RunnerRequest(
@@ -1176,7 +1199,8 @@ def _noop_opencode_mcp_registration(monkeypatch: pytest.MonkeyPatch) -> None:
         del client, session_id
         return True
 
-    async def _noop_restart() -> None:
+    async def _noop_restart(**kwargs) -> None:
+        del kwargs
         return None
 
     def _noop_write_provider_config(*, provider_id, model_id, model_client_config):

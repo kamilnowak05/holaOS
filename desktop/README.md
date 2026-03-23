@@ -41,18 +41,20 @@ This launches:
 - TS build watcher for Electron main/preload (`out/dist-electron/*.cjs`)
 - Electron desktop window with live restarts on main/preload changes
 
-Control-plane endpoint presets:
+Internal backend preset entrypoints:
 
 ```bash
-# local control plane/services (127.0.0.1:3060/3033/3037)
+# internal-only preset hook for local backend env
 npm run dev:cp:local
 
-# dev control plane (54.214.105.154:3060)
+# internal-only preset hook for shared dev backend env
 npm run dev:cp:dev
 
-# prod control plane (35.160.37.189:3060)
+# production/default env
 npm run dev:cp:prod
 ```
+
+The repo does not ship remote endpoint URLs. Remote auth/backend access is configured entirely through environment variables outside the public repo. Local/dev backend overrides are only honored when `HOLABOSS_INTERNAL_DEV=1` is set or when running the unpackaged dev app through the internal preset scripts above.
 
 `prepare:runtime` downloads the pinned macOS runtime bundle from the GitHub release defined in [runtime-manifest.json](/Users/jeffrey/Desktop/hola-boss-oss/desktop/runtime-manifest.json) and stages it into `out/runtime-macos/`.
 
@@ -114,18 +116,29 @@ Output:
 Run packaged app with endpoint presets:
 
 ```bash
-# uses out/release/mac-arm64/... by default
+# internal-only local override
 npm run packaged:run:local
+
+# internal-only dev override
 npm run packaged:run:dev
+
+# production default
 npm run packaged:run:prod
 ```
 
-Optional overrides:
+Remote configuration:
 - `HOLABOSS_AUTH_BASE_URL` for Better Auth session endpoint
-- `HOLABOSS_DESKTOP_CONTROL_PLANE_BASE_URL` for desktop binding/control-plane endpoint
-- `HOLABOSS_PROJECTS_URL` for projects service endpoint (default derived from control-plane host + `:3033`)
-- `HOLABOSS_MARKETPLACE_URL` for marketplace service endpoint (default derived from control-plane host + `:3037`)
+- `HOLABOSS_AUTH_SIGN_IN_URL` for the hosted sign-in page
+- `HOLABOSS_BACKEND_BASE_URL` for the Holaboss backend base URL used by the desktop
+- `HOLABOSS_INTERNAL_DEV=1` to allow non-production backend overrides in packaged runs
 - `HOLABOSS_PACKAGED_APP_BIN` for an explicit packaged binary path
+
+Optional internal-only overrides:
+- `HOLABOSS_PROJECTS_URL`
+- `HOLABOSS_MARKETPLACE_URL`
+- `HOLABOSS_PROACTIVE_URL`
+
+The preset scripts no longer embed concrete URLs. Internal developers are expected to source the backend URL from a private shell profile, `.envrc`, CI secret, or another non-public config mechanism before running the preset scripts.
 
 To build a mac installer image:
 

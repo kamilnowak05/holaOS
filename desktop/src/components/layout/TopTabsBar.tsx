@@ -34,14 +34,11 @@ export function TopTabsBar({ theme, onThemeChange, onUserMenuToggle, runtimeIndi
   const [workspaceQuery, setWorkspaceQuery] = useState("");
   const { selectedWorkspaceId, setSelectedWorkspaceId } = useWorkspaceSelection();
   const {
-    availableTemplates,
     workspaces,
     selectedWorkspace,
-    selectedTemplateName,
-    setSelectedTemplateName,
+    selectedTemplateFolder,
     newWorkspaceName,
     setNewWorkspaceName,
-    resolvedUserId,
     isLoadingBootstrap,
     isRefreshing,
     isCreatingWorkspace,
@@ -51,6 +48,7 @@ export function TopTabsBar({ theme, onThemeChange, onUserMenuToggle, runtimeIndi
     sessionModeLabel,
     sessionTargetId,
     refreshWorkspaceData,
+    chooseTemplateFolder,
     createWorkspace
   } = useWorkspaceDesktop();
 
@@ -180,7 +178,6 @@ export function TopTabsBar({ theme, onThemeChange, onUserMenuToggle, runtimeIndi
                   setWorkspaceSwitcherOpen(false);
                 }}
                 className="inline-flex h-[42px] items-center justify-center gap-2 rounded-[16px] border border-neon-green/40 bg-neon-green/10 px-3 text-[12px] text-neon-green transition hover:bg-neon-green/14 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={!resolvedUserId}
               >
                 <Plus size={14} />
                 <span>New workspace</span>
@@ -200,21 +197,16 @@ export function TopTabsBar({ theme, onThemeChange, onUserMenuToggle, runtimeIndi
             {createPanelOpen ? (
               <form onSubmit={onCreateWorkspace} className="theme-subtle-surface mt-2 grid gap-2 rounded-[18px] border border-panel-border/45 p-3">
                 <div className="grid gap-2 xl:grid-cols-[minmax(170px,0.9fr)_minmax(220px,1.2fr)_auto]">
-                  <label className="theme-control-surface flex min-w-0 items-center gap-2 rounded-[16px] border border-panel-border/45 px-3 py-2 text-[12px] text-text-muted/82">
+                  <button
+                    type="button"
+                    onClick={() => void chooseTemplateFolder()}
+                    className="theme-control-surface flex min-w-0 items-center gap-2 rounded-[16px] border border-panel-border/45 px-3 py-2 text-left text-[12px] text-text-muted/82 transition hover:border-neon-green/35"
+                  >
                     <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-text-dim/72">Template</span>
-                    <select
-                      value={selectedTemplateName}
-                      onChange={(event) => setSelectedTemplateName(event.target.value)}
-                      className="min-w-0 flex-1 bg-transparent text-[12px] text-text-main outline-none"
-                    >
-                      <option value="">{availableTemplates.length ? "Select template" : "No templates"}</option>
-                      {availableTemplates.map((template) => (
-                        <option key={template.name} value={template.name} className="bg-obsidian text-text-main">
-                          {template.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    <span className="min-w-0 flex-1 truncate text-text-main">
+                      {selectedTemplateFolder?.templateName || selectedTemplateFolder?.rootPath || "Choose folder"}
+                    </span>
+                  </button>
 
                   <input
                     value={newWorkspaceName}
@@ -225,7 +217,7 @@ export function TopTabsBar({ theme, onThemeChange, onUserMenuToggle, runtimeIndi
 
                   <button
                     type="submit"
-                    disabled={!resolvedUserId || !selectedTemplateName || isCreatingWorkspace}
+                    disabled={!selectedTemplateFolder?.rootPath || isCreatingWorkspace}
                     className="inline-flex h-[42px] items-center justify-center gap-2 rounded-[16px] border border-neon-green/40 bg-neon-green/10 px-3 text-[12px] text-neon-green transition hover:bg-neon-green/14 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {isCreatingWorkspace ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
@@ -233,9 +225,9 @@ export function TopTabsBar({ theme, onThemeChange, onUserMenuToggle, runtimeIndi
                   </button>
                 </div>
 
-                {selectedTemplateName ? (
+                {selectedTemplateFolder ? (
                   <div className="text-[11px] text-text-dim/78">
-                    {availableTemplates.find((template) => template.name === selectedTemplateName)?.description || "Template selected."}
+                    {selectedTemplateFolder.description || selectedTemplateFolder.rootPath || "Template folder selected."}
                   </div>
                 ) : null}
               </form>

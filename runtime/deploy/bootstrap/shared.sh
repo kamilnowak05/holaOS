@@ -92,7 +92,6 @@ holaboss_runtime_prepare_roots() {
   export HOLABOSS_RUNTIME_APP_ROOT="${HOLABOSS_RUNTIME_APP_ROOT:-/app}"
   export HOLABOSS_RUNTIME_PYTHON="${HOLABOSS_RUNTIME_PYTHON:-/opt/venv/bin/python}"
   export HOLABOSS_RUNTIME_SITE_PACKAGES="${HOLABOSS_RUNTIME_SITE_PACKAGES:-}"
-  export HOLABOSS_RUNTIME_FLAVOR="${HOLABOSS_RUNTIME_FLAVOR:-holaboss}"
   mkdir -p "${HOLABOSS_RUNTIME_APP_ROOT}"
   export PYTHONPATH="${HOLABOSS_RUNTIME_APP_ROOT}${HOLABOSS_RUNTIME_SITE_PACKAGES:+:${HOLABOSS_RUNTIME_SITE_PACKAGES}}${PYTHONPATH:+:${PYTHONPATH}}"
   export HOLABOSS_USER_ID="${SANDBOX_HOLABOSS_USER_ID:-}"
@@ -113,10 +112,6 @@ holaboss_runtime_selected_harness() {
   local configured_harness="${SANDBOX_AGENT_HARNESS:-}"
   if [ -n "${configured_harness}" ]; then
     printf '%s' "${configured_harness}" | tr '[:upper:]' '[:lower:]'
-    return 0
-  fi
-  if [ "${HOLABOSS_RUNTIME_FLAVOR}" = "oss" ]; then
-    printf 'agno'
     return 0
   fi
   printf 'opencode'

@@ -201,7 +201,7 @@ export function FileExplorerPane() {
 
     async function loadWorkspaceDirectory() {
       try {
-        const workspaceRoot = await window.electronAPI.holaboss.getWorkspaceRoot(selectedWorkspaceId);
+        const workspaceRoot = await window.electronAPI.workspace.getWorkspaceRoot(selectedWorkspaceId);
         if (!workspaceRoot || cancelled || currentPath === workspaceRoot) {
           return;
         }

@@ -144,8 +144,7 @@ def test_run_onboarding_request_complete_uses_onboarding_request(monkeypatch) ->
     }
 
 
-def test_oss_flavor_still_supports_cronjobs_and_onboarding_groups(monkeypatch) -> None:
-    monkeypatch.setenv("HOLABOSS_RUNTIME_FLAVOR", "oss")
+def test_runtime_still_supports_cronjobs_and_onboarding_groups(monkeypatch) -> None:
     monkeypatch.setattr(
         hb_workflow_extensions,
         "_cronjobs_request",
@@ -166,7 +165,6 @@ def test_oss_flavor_still_supports_cronjobs_and_onboarding_groups(monkeypatch) -
 
 
 def test_oss_flavor_still_supports_memory_group(monkeypatch) -> None:
-    monkeypatch.setenv("HOLABOSS_RUNTIME_FLAVOR", "oss")
     monkeypatch.setattr(hb_cli, "memory_status", lambda *, workspace_id: {"workspace_id": workspace_id})
 
     payload = hb_cli.run(["memory", "status", "--workspace-id", "workspace-1"])
@@ -174,15 +172,13 @@ def test_oss_flavor_still_supports_memory_group(monkeypatch) -> None:
     assert payload == {"workspace_id": "workspace-1"}
 
 
-def test_runtime_info_reports_oss_flavor(monkeypatch) -> None:
-    monkeypatch.setenv("HOLABOSS_RUNTIME_FLAVOR", "oss")
-
+def test_runtime_info_reports_runtime_mode(monkeypatch) -> None:
     payload = hb_cli.run(["runtime", "info"])
 
     assert payload == {
-        "runtime_flavor": "oss",
+        "runtime_mode": "oss",
         "holaboss_features_enabled": False,
-        "default_harness": "agno",
+        "default_harness": "opencode",
         "workflow_backend": "remote_api",
         "runtime_config_path": "/holaboss/state/runtime-config.json",
         "runtime_config_loaded": False,

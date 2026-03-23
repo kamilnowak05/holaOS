@@ -4,9 +4,7 @@ import {
   useEffect,
   useMemo,
   useState,
-  type Dispatch,
   type ReactNode,
-  type SetStateAction
 } from "react";
 import { type AuthSession, useDesktopAuthSession } from "@/lib/auth/authClient";
 import { useWorkspaceSelection } from "@/lib/workspaceSelection";
@@ -18,14 +16,11 @@ interface WorkspaceDesktopContextValue {
   runtimeConfig: RuntimeConfigPayload | null;
   runtimeStatus: RuntimeStatusPayload | null;
   clientConfig: HolabossClientConfigPayload | null;
-  templates: TemplateMetadataPayload[];
-  availableTemplates: TemplateMetadataPayload[];
   workspaces: WorkspaceRecordPayload[];
   selectedWorkspace: WorkspaceRecordPayload | null;
-  selectedTemplateName: string;
-  setSelectedTemplateName: Dispatch<SetStateAction<string>>;
+  selectedTemplateFolder: TemplateFolderSelectionPayload | null;
   newWorkspaceName: string;
-  setNewWorkspaceName: Dispatch<SetStateAction<string>>;
+  setNewWorkspaceName: (value: string) => void;
   resolvedUserId: string;
   isLoadingBootstrap: boolean;
   isRefreshing: boolean;
@@ -40,6 +35,7 @@ interface WorkspaceDesktopContextValue {
   sessionModeLabel: string;
   sessionTargetId: string;
   refreshWorkspaceData: () => Promise<void>;
+  chooseTemplateFolder: () => Promise<void>;
   createWorkspace: () => Promise<void>;
 }
 
@@ -60,10 +56,6 @@ function sessionUserId(session: AuthSession | null): string {
 
 function normalizeErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Request failed.";
-}
-
-function pickDefaultTemplate(templates: TemplateMetadataPayload[]) {
-  return templates.find((template) => !template.is_coming_soon)?.name ?? templates[0]?.name ?? "";
 }
 
 function normalizedOnboardingStatus(workspace: WorkspaceRecordPayload | null): string {
@@ -88,9 +80,8 @@ export function WorkspaceDesktopProvider({ children }: { children: ReactNode }) 
   const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfigPayload | null>(null);
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatusPayload | null>(null);
   const [clientConfig, setClientConfig] = useState<HolabossClientConfigPayload | null>(null);
-  const [templates, setTemplates] = useState<TemplateMetadataPayload[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceRecordPayload[]>([]);
-  const [selectedTemplateName, setSelectedTemplateName] = useState("");
+  const [selectedTemplateFolder, setSelectedTemplateFolder] = useState<TemplateFolderSelectionPayload | null>(null);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [isLoadingBootstrap, setIsLoadingBootstrap] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -102,10 +93,6 @@ export function WorkspaceDesktopProvider({ children }: { children: ReactNode }) 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
     [selectedWorkspaceId, workspaces]
-  );
-  const availableTemplates = useMemo(
-    () => templates.filter((template) => !template.is_coming_soon),
-    [templates]
   );
   const onboardingModeActive = useMemo(() => isOnboardingMode(selectedWorkspace), [selectedWorkspace]);
   const sessionModeLabel = onboardingModeActive ? "onboarding" : "main";
@@ -124,7 +111,7 @@ export function WorkspaceDesktopProvider({ children }: { children: ReactNode }) 
         const [nextRuntimeConfig, nextRuntimeStatus, nextClientConfig] = await Promise.all([
           window.electronAPI.runtime.getConfig(),
           window.electronAPI.runtime.getStatus(),
-          window.electronAPI.holaboss.getClientConfig()
+          window.electronAPI.workspace.getClientConfig()
         ]);
         if (cancelled) {
           return;
@@ -170,21 +157,9 @@ export function WorkspaceDesktopProvider({ children }: { children: ReactNode }) 
   }, []);
 
   async function loadWorkspaceData(preserveSelection = true) {
-    const [templateResponse, workspaceResponse] = await Promise.all([
-      window.electronAPI.holaboss.listTemplates(false),
-      window.electronAPI.holaboss.listWorkspaces()
-    ]);
-
-    const nextTemplates = templateResponse.templates;
+    const workspaceResponse = await window.electronAPI.workspace.listWorkspaces();
     const nextWorkspaces = workspaceResponse.items;
-    setTemplates(nextTemplates);
     setWorkspaces(nextWorkspaces);
-    setSelectedTemplateName((current) => {
-      if (current && nextTemplates.some((template) => template.name === current && !template.is_coming_soon)) {
-        return current;
-      }
-      return pickDefaultTemplate(nextTemplates);
-    });
 
     setSelectedWorkspaceId((current) => {
       const stored = preserveSelection ? current : "";
@@ -214,18 +189,18 @@ export function WorkspaceDesktopProvider({ children }: { children: ReactNode }) 
   }
 
   async function createWorkspace() {
-    if (!selectedTemplateName) {
-      setWorkspaceErrorMessage("Select a template first.");
+    if (!selectedTemplateFolder?.rootPath) {
+      setWorkspaceErrorMessage("Choose a template folder first.");
       return;
     }
 
     setIsCreatingWorkspace(true);
     setWorkspaceErrorMessage("");
     try {
-      const response = await window.electronAPI.holaboss.createWorkspace({
+      const response = await window.electronAPI.workspace.createWorkspace({
         holaboss_user_id: resolvedUserId || LOCAL_OSS_TEMPLATE_USER_ID,
         name: newWorkspaceName.trim() || "Desktop Workspace",
-        template_name: selectedTemplateName
+        template_root_path: selectedTemplateFolder.rootPath
       });
       setNewWorkspaceName("");
       await loadWorkspaceData(false);
@@ -234,6 +209,18 @@ export function WorkspaceDesktopProvider({ children }: { children: ReactNode }) 
       setWorkspaceErrorMessage(normalizeErrorMessage(error));
     } finally {
       setIsCreatingWorkspace(false);
+    }
+  }
+
+  async function chooseTemplateFolder() {
+    setWorkspaceErrorMessage("");
+    try {
+      const selection = await window.electronAPI.workspace.pickTemplateFolder();
+      if (!selection.canceled && selection.rootPath) {
+        setSelectedTemplateFolder(selection);
+      }
+    } catch (error) {
+      setWorkspaceErrorMessage(normalizeErrorMessage(error));
     }
   }
 
@@ -299,7 +286,7 @@ export function WorkspaceDesktopProvider({ children }: { children: ReactNode }) 
 
     let cancelled = false;
     const timer = window.setInterval(() => {
-      void window.electronAPI.holaboss
+      void window.electronAPI.workspace
         .listWorkspaces()
         .then((response) => {
           if (!cancelled) {
@@ -337,8 +324,8 @@ export function WorkspaceDesktopProvider({ children }: { children: ReactNode }) 
 
     if (!isSignedIn) {
       return {
-        tone: "warning" as const,
-        message: "Sign in to load your runtime binding and workspace control settings."
+        tone: "info" as const,
+        message: "Local template import is available without sign-in. Sign in only for synced Holaboss product settings."
       };
     }
 
@@ -384,12 +371,9 @@ export function WorkspaceDesktopProvider({ children }: { children: ReactNode }) 
       runtimeConfig,
       runtimeStatus,
       clientConfig,
-      templates,
-      availableTemplates,
       workspaces,
       selectedWorkspace,
-      selectedTemplateName,
-      setSelectedTemplateName,
+      selectedTemplateFolder,
       newWorkspaceName,
       setNewWorkspaceName,
       resolvedUserId,
@@ -403,17 +387,16 @@ export function WorkspaceDesktopProvider({ children }: { children: ReactNode }) 
       sessionModeLabel,
       sessionTargetId,
       refreshWorkspaceData,
+      chooseTemplateFolder,
       createWorkspace
     }),
     [
       runtimeConfig,
       runtimeStatus,
       clientConfig,
-      templates,
-      availableTemplates,
       workspaces,
       selectedWorkspace,
-      selectedTemplateName,
+      selectedTemplateFolder,
       newWorkspaceName,
       resolvedUserId,
       isLoadingBootstrap,

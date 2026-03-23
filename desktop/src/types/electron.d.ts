@@ -154,37 +154,6 @@ declare global {
     description: string;
   }
 
-  interface SpotlightItemPayload {
-    label: string;
-    title: string;
-    description: string;
-    template_name: string;
-  }
-
-  interface TemplateMetadataPayload {
-    name: string;
-    repo: string;
-    path: string;
-    default_ref: string;
-    description: string | null;
-    is_hidden: boolean;
-    is_coming_soon: boolean;
-    allowed_user_ids: string[];
-    icon: string;
-    emoji: string | null;
-    apps: string[];
-    tags: string[];
-    category: string;
-    long_description: string | null;
-    agents: TemplateAgentInfoPayload[];
-    views: TemplateViewInfoPayload[];
-  }
-
-  interface TemplateListResponsePayload {
-    templates: TemplateMetadataPayload[];
-    spotlight: SpotlightItemPayload[];
-  }
-
   interface WorkspaceRecordPayload {
     id: string;
     name: string;
@@ -319,9 +288,14 @@ declare global {
   interface HolabossCreateWorkspacePayload {
     holaboss_user_id: string;
     name: string;
-    template_name: string;
-    template_ref?: string | null;
-    template_commit?: string | null;
+    template_root_path: string;
+  }
+
+  interface TemplateFolderSelectionPayload {
+    canceled: boolean;
+    rootPath: string | null;
+    templateName: string | null;
+    description: string | null;
   }
 
   interface HolabossQueueSessionInputPayload {
@@ -391,9 +365,9 @@ declare global {
     ui: {
       setTheme: (theme: string) => Promise<void>;
     };
-    holaboss: {
+    workspace: {
       getClientConfig: () => Promise<HolabossClientConfigPayload>;
-      listTemplates: (includeHidden?: boolean) => Promise<TemplateListResponsePayload>;
+      pickTemplateFolder: () => Promise<TemplateFolderSelectionPayload>;
       listWorkspaces: () => Promise<WorkspaceListResponsePayload>;
       getWorkspaceRoot: (workspaceId: string) => Promise<string>;
       createWorkspace: (payload: HolabossCreateWorkspacePayload) => Promise<WorkspaceResponsePayload>;

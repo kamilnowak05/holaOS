@@ -25,15 +25,6 @@ require_cmd uv
 PYTHON_BIN="${HOLABOSS_MACOS_PYTHON_BIN:-python3}"
 require_cmd "${PYTHON_BIN}"
 OUTPUT_ROOT="$("${PYTHON_BIN}" -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${OUTPUT_ROOT}")"
-RUNTIME_FLAVOR="${HOLABOSS_RUNTIME_FLAVOR:-holaboss}"
-
-case "${RUNTIME_FLAVOR}" in
-  holaboss|oss) ;;
-  *)
-    echo "unsupported HOLABOSS_RUNTIME_FLAVOR=${RUNTIME_FLAVOR}; expected holaboss or oss" >&2
-    exit 1
-    ;;
-esac
 
 PYTHON_VERSION="$("${PYTHON_BIN}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 case "${PYTHON_VERSION}" in
@@ -124,12 +115,10 @@ fi
 export HOLABOSS_RUNTIME_APP_ROOT="${BUNDLE_ROOT}/runtime/app"
 export HOLABOSS_RUNTIME_PYTHON="${RUNTIME_PYTHON}"
 export HOLABOSS_RUNTIME_SITE_PACKAGES="${BUNDLE_ROOT}/python-packages"
-export HOLABOSS_RUNTIME_FLAVOR="${HOLABOSS_RUNTIME_FLAVOR:-__RUNTIME_FLAVOR__}"
 export PATH="${BUNDLE_ROOT}/node-runtime/bin:${PATH}"
 
 exec "${BUNDLE_ROOT}/runtime/bin/hb" "$@"
 EOF
-perl -0pi -e 's/__RUNTIME_FLAVOR__/'"${RUNTIME_FLAVOR}"'/g' "${BIN_DIR}/hb"
 
 cat > "${BIN_DIR}/sandbox-runtime" <<'EOF'
 #!/usr/bin/env bash
@@ -147,19 +136,16 @@ fi
 export HOLABOSS_RUNTIME_APP_ROOT="${BUNDLE_ROOT}/runtime/app"
 export HOLABOSS_RUNTIME_PYTHON="${RUNTIME_PYTHON}"
 export HOLABOSS_RUNTIME_SITE_PACKAGES="${BUNDLE_ROOT}/python-packages"
-export HOLABOSS_RUNTIME_FLAVOR="${HOLABOSS_RUNTIME_FLAVOR:-__RUNTIME_FLAVOR__}"
 export PATH="${BUNDLE_ROOT}/node-runtime/bin:${PATH}"
 
 exec "${BUNDLE_ROOT}/runtime/bootstrap/macos.sh" "$@"
 EOF
-perl -0pi -e 's/__RUNTIME_FLAVOR__/'"${RUNTIME_FLAVOR}"'/g' "${BIN_DIR}/sandbox-runtime"
 
 chmod +x "${BIN_DIR}/hb" "${BIN_DIR}/sandbox-runtime"
 
 cat > "${PACKAGE_METADATA_PATH}" <<EOF
 {
   "platform": "macos",
-  "runtime_flavor": "${RUNTIME_FLAVOR}",
   "python_runtime_path": "$(basename "${BUNDLED_PYTHON_PREFIX}")",
   "python_deps_installed": $([ "${SKIP_PYTHON_DEPS}" = "1" ] && printf 'false' || printf 'true'),
   "node_deps_installed": $([ "${SKIP_NODE_DEPS}" = "1" ] && printf 'false' || printf 'true'),

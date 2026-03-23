@@ -186,7 +186,7 @@ export function ChatPane() {
       action: "close_requested",
       detail: reason
     });
-    await window.electronAPI.holaboss.closeSessionOutputStream(streamId, reason);
+    await window.electronAPI.workspace.closeSessionOutputStream(streamId, reason);
   }
 
   function setActiveSession(sessionId: string | null) {
@@ -314,7 +314,7 @@ export function ChatPane() {
       setChatErrorMessage("");
 
       try {
-        const runtimeStates = await window.electronAPI.holaboss.listRuntimeStates(selectedWorkspaceId);
+        const runtimeStates = await window.electronAPI.workspace.listRuntimeStates(selectedWorkspaceId);
         if (cancelled) {
           return;
         }
@@ -330,7 +330,7 @@ export function ChatPane() {
           return;
         }
 
-        const history = await window.electronAPI.holaboss.getSessionHistory({
+        const history = await window.electronAPI.workspace.getSessionHistory({
           sessionId: nextSessionId,
           workspaceId: selectedWorkspaceId
         });
@@ -380,7 +380,7 @@ export function ChatPane() {
     async function loadTaskProposals() {
       setIsLoadingTaskProposals(true);
       try {
-        const response = await window.electronAPI.holaboss.listTaskProposals(selectedWorkspaceId);
+        const response = await window.electronAPI.workspace.listTaskProposals(selectedWorkspaceId);
         if (!cancelled) {
           setTaskProposals(response.proposals);
         }
@@ -408,7 +408,7 @@ export function ChatPane() {
 
   useEffect(() => {
     let cancelled = false;
-    void window.electronAPI.holaboss
+    void window.electronAPI.workspace
       .isVerboseTelemetryEnabled()
       .then((enabled) => {
         if (!cancelled) {
@@ -437,7 +437,7 @@ export function ChatPane() {
     }
     let cancelled = false;
     const timer = window.setInterval(() => {
-      void window.electronAPI.holaboss
+      void window.electronAPI.workspace
         .getSessionStreamDebug()
         .then((entries) => {
           if (cancelled) {
@@ -487,7 +487,7 @@ export function ChatPane() {
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.holaboss.onSessionStreamEvent((payload) => {
+    const unsubscribe = window.electronAPI.workspace.onSessionStreamEvent((payload) => {
       const currentStreamId = activeStreamIdRef.current;
       const pendingInputId = pendingInputIdRef.current || "";
       const hasPendingStreamAttach = Boolean(pendingInputId);
@@ -825,7 +825,7 @@ export function ChatPane() {
       }
       inFlight = true;
       try {
-        const response = await window.electronAPI.holaboss.listRuntimeStates(selectedWorkspaceId);
+        const response = await window.electronAPI.workspace.listRuntimeStates(selectedWorkspaceId);
         if (cancelled) {
           return;
         }
@@ -946,7 +946,7 @@ export function ChatPane() {
     pendingInputIdRef.current = STREAM_ATTACH_PENDING;
 
     try {
-      const preOpenedStream = await window.electronAPI.holaboss.openSessionOutputStream({
+      const preOpenedStream = await window.electronAPI.workspace.openSessionOutputStream({
         sessionId: targetSessionId,
         workspaceId: selectedWorkspace.id,
         includeHistory: false,
@@ -964,7 +964,7 @@ export function ChatPane() {
         detail: "session tail stream opened before queue"
       });
 
-      const queued = await window.electronAPI.holaboss.queueSessionInput({
+      const queued = await window.electronAPI.workspace.queueSessionInput({
         text: trimmed,
         workspace_id: selectedWorkspace.id,
         image_urls: null,
@@ -999,7 +999,7 @@ export function ChatPane() {
             detail: `queue_session=${queued.session_id}`
           });
         }
-        const retargeted = await window.electronAPI.holaboss.openSessionOutputStream({
+        const retargeted = await window.electronAPI.workspace.openSessionOutputStream({
           sessionId: queued.session_id,
           workspaceId: selectedWorkspace.id,
           inputId: queued.input_id,
@@ -1060,7 +1060,7 @@ export function ChatPane() {
     setTaskProposalStatusMessage("");
     setIsLoadingTaskProposals(true);
     try {
-      const response = await window.electronAPI.holaboss.listTaskProposals(selectedWorkspaceId);
+      const response = await window.electronAPI.workspace.listTaskProposals(selectedWorkspaceId);
       setTaskProposals(response.proposals);
     } catch (error) {
       setTaskProposalStatusMessage(normalizeErrorMessage(error));
@@ -1076,7 +1076,7 @@ export function ChatPane() {
     setIsTriggeringTaskProposal(true);
     setTaskProposalStatusMessage("");
     try {
-      const response = await window.electronAPI.holaboss.enqueueRemoteDemoTaskProposal({
+      const response = await window.electronAPI.workspace.enqueueRemoteDemoTaskProposal({
         workspace_id: selectedWorkspaceId,
       });
       setTaskProposalStatusMessage(`Remote proactive job queued. Pending cloud jobs: ${response.pending_count}.`);
