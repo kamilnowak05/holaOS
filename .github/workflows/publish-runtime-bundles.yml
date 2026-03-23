@@ -18,8 +18,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ensure-runtime-release:
+    name: Ensure runtime release exists
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: runtime-bundles-${{ github.ref_name }}
+      RELEASE_TITLE: Runtime Bundles (${{ github.ref_name }})
+    steps:
+      - name: Ensure runtime release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            prerelease_flag=()
+            if [ "${GITHUB_REF_NAME}" != "main" ]; then
+              prerelease_flag+=(--prerelease)
+            fi
+            gh release create "${RELEASE_TAG}" \
+              --title "${RELEASE_TITLE}" \
+              --notes "Versioned desktop runtime bundles for ${GITHUB_REF_NAME}." \
+              --target "${GITHUB_SHA}" \
+              "${prerelease_flag[@]}"
+          fi
+
   publish-macos-runtime:
     name: Build macOS runtime bundle (${{ matrix.runtime_flavor }})
+    needs: ensure-runtime-release
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -64,21 +88,6 @@ jobs:
       - name: Archive macOS runtime bundle
         run: |
           tar -C out -czf "out/${{ matrix.asset_prefix }}-${GITHUB_SHA}.tar.gz" "${{ matrix.output_dir }}"
-
-      - name: Ensure runtime release exists
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            prerelease_flag=()
-            if [ "${GITHUB_REF_NAME}" != "main" ]; then
-              prerelease_flag+=(--prerelease)
-            fi
-            gh release create "${RELEASE_TAG}" \
-              --title "${RELEASE_TITLE}" \
-              --notes "Versioned desktop runtime bundles for ${GITHUB_REF_NAME}." \
-              "${prerelease_flag[@]}"
-          fi
 
       - name: Upload macOS runtime bundle release asset
         env:
