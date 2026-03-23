@@ -21,16 +21,35 @@ jobs:
   ensure-runtime-release:
     name: Ensure runtime release exists
     runs-on: ubuntu-latest
-    env:
-      RELEASE_TAG: runtime-bundles-${{ github.ref_name }}
-      RELEASE_TITLE: Runtime Bundles (${{ github.ref_name }})
+    outputs:
+      release_tag: ${{ steps.release_meta.outputs.release_tag }}
+      release_title: ${{ steps.release_meta.outputs.release_title }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Compute release metadata
+        id: release_meta
+        run: |
+          release_date="$(date -u +'%Y.%-m.%-d')"
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            release_tag="holaboss-${release_date}"
+            release_title="Holaboss ${release_date}"
+          else
+            release_tag="holaboss-${GITHUB_REF_NAME}-${release_date}"
+            release_title="Holaboss ${GITHUB_REF_NAME} ${release_date}"
+          fi
+
+          {
+            echo "release_tag=${release_tag}"
+            echo "release_title=${release_title}"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Ensure runtime release exists
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.release_tag }}
+          RELEASE_TITLE: ${{ steps.release_meta.outputs.release_title }}
         run: |
           if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             prerelease_flag=()
@@ -61,8 +80,8 @@ jobs:
             asset_prefix: holaboss-runtime-macos-oss
             artifact_prefix: holaboss-runtime-macos-oss
     env:
-      RELEASE_TAG: runtime-bundles-${{ github.ref_name }}
-      RELEASE_TITLE: Runtime Bundles (${{ github.ref_name }})
+      RELEASE_TAG: ${{ needs.ensure-runtime-release.outputs.release_tag }}
+      RELEASE_TITLE: ${{ needs.ensure-runtime-release.outputs.release_title }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
