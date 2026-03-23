@@ -1,2 +1,0 @@
-[console_scripts]
-hb = sandbox_agent_runtime.hb_cli:main
