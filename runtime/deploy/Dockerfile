@@ -2,11 +2,14 @@ ARG TOOLCHAIN_IMAGE=holaboss/sandbox-base-toolchain:dev
 FROM ${TOOLCHAIN_IMAGE}
 ARG HOLABOSS_RUNTIME_FLAVOR=holaboss
 
-WORKDIR /tmp/sandbox-image-source
+WORKDIR /tmp/runtime-source
 
-COPY runtime/deploy/ /tmp/sandbox-image-source/
-RUN chmod +x /tmp/sandbox-image-source/build_runtime_root.sh \
-    && HOLABOSS_RUNTIME_FLAVOR="${HOLABOSS_RUNTIME_FLAVOR}" /tmp/sandbox-image-source/build_runtime_root.sh /opt/holaboss-runtime
+COPY runtime/deploy/ /tmp/runtime-source/deploy/
+COPY runtime/src/ /tmp/runtime-source/src/
+COPY runtime/pyproject.toml /tmp/runtime-source/pyproject.toml
+COPY runtime/uv.lock /tmp/runtime-source/uv.lock
+RUN chmod +x /tmp/runtime-source/deploy/build_runtime_root.sh \
+    && HOLABOSS_RUNTIME_FLAVOR="${HOLABOSS_RUNTIME_FLAVOR}" /tmp/runtime-source/deploy/build_runtime_root.sh /opt/holaboss-runtime
 
 WORKDIR /app
 

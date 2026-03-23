@@ -2,8 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-OUTPUT_ROOT="${1:-${REPO_ROOT}/out/runtime-macos}"
+RUNTIME_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${RUNTIME_ROOT}/.." && pwd)"
+OUTPUT_ROOT="${1:-${RUNTIME_ROOT}/out/runtime-macos}"
 STAGING_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/holaboss-runtime-macos.XXXXXX")"
 
 cleanup() {

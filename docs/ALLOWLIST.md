@@ -1,26 +1,29 @@
-# OSS Allowlist
+# OSS Runtime Boundary
 
-The repo is intentionally in a reduction phase. The immediate goal is to make the shared runtime package standalone before any broader OSS import.
+The runtime repo is now organized around one Python project and one packaging surface:
 
-## Allowed Import Source
+- `runtime/src/`: runtime source code
+- `runtime/tests/`: runtime tests
+- `runtime/deploy/`: packaging and bootstrap assets
 
-Only import this path from `hola-boss-ai`:
+## Allowed Runtime Ownership
 
-- `deploy/sandbox_image/`
+These paths are owned directly by `hola-boss-oss`:
 
-It should land in this repo as:
+- `runtime/src/**`
+- `runtime/tests/**`
+- `runtime/deploy/**`
+- `runtime/pyproject.toml`
+- `runtime/uv.lock`
 
-- `runtime/deploy/`
+## Not Allowed
 
-## Not Allowed Right Now
-
-Do not import any of the following until a dependency audit proves they are required:
+Do not reintroduce private backend ownership into this repo:
 
 - any path under `hola-boss-ai/src/`
 - any path under `hola-boss-ai/test/`
 - `hola-boss-ai/examples/`
 - `hola-boss-ai/scripts/`
-- top-level runtime compose files or repo-level packaging files outside the imported `deploy/sandbox_image` source boundary
 - any files from `hola-boss-desktop`
 
 ## Rule For Expanding The Boundary
@@ -29,8 +32,4 @@ If a future import is needed:
 
 1. prove the dependency with code or packaging analysis
 2. document it in `docs/STANDALONE_RUNTIME_AUDIT.md`
-3. then expand this allowlist
-
-## Release Rule
-
-`hola-boss-oss` should only widen from the standalone runtime boundary after that boundary is clean and reproducible.
+3. then expand this boundary deliberately

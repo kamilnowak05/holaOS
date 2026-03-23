@@ -1,29 +1,30 @@
 # Hola Boss OSS
 
-Private staging repo for extracting the OSS runtime/distribution surface of Holaboss.
-
-Current scope is intentionally narrow:
-- `runtime/deploy/`, sourced from `hola-boss-ai/deploy/sandbox_image`
-- repo-local docs and sync tooling
-
-The desktop app and any broader backend/runtime support code are intentionally out of scope until the runtime boundary is proven standalone.
+Holaboss OSS is the public home for the runtime code and packaging assets that power local and hosted Holaboss execution.
 
 ## Layout
 
-- `runtime/`: current OSS candidate surface, starting from `deploy/`
-- `docs/`: allowlist and standalone-boundary audit
-- `scripts/`: sync/import helpers
+- `runtime/src/`: Python source of truth for `sandbox_agent_runtime`
+- `runtime/tests/`: pytest coverage for the runtime package
+- `runtime/deploy/`: Dockerfiles, bootstrap scripts, entrypoints, and bundle assembly
+- `docs/`: runtime boundary and packaging notes
 
-## Current Finding
+## Development
 
-`deploy/sandbox_agent_runtime/*` in the OSS layout has no direct Python imports from `hola-boss-ai/src`.
+Runtime tests live under `runtime/tests/` and are configured by `runtime/pyproject.toml`.
 
-That means the first OSS extraction step is:
-1. keep `deploy/` intact
-2. document its real packaging-time dependencies
-3. only reintroduce more code if a dependency audit proves it is required
+```bash
+cd runtime
+uv run pytest
+```
 
-Use [docs/ALLOWLIST.md](docs/ALLOWLIST.md) as the import rule and [docs/STANDALONE_RUNTIME_AUDIT.md](docs/STANDALONE_RUNTIME_AUDIT.md) as the dependency record.
+Release and bundle workflows build from:
+- `runtime/src/**`
+- `runtime/pyproject.toml`
+- `runtime/uv.lock`
+- `runtime/deploy/**`
+
+`runtime/deploy` packages the runtime, but it is no longer the source of truth for Python code.
 
 
 ## Star History
