@@ -1,0 +1,11 @@
+{
+  "platform": "macos",
+  "sourceRepo": "holaboss-ai/hola-boss-oss",
+  "sourceCommit": "b9acc1f34e50920004f4ad889aec4187919ccfa1",
+  "releaseTag": "holaboss-2026.3.23",
+  "assetName": "holaboss-runtime-macos-oss-b9acc1f34e50920004f4ad889aec4187919ccfa1.tar.gz",
+  "workflowFile": "publish-runtime-bundles.yml",
+  "workflowName": "Publish Runtime Bundles",
+  "artifactName": "holaboss-runtime-macos-oss-b9acc1f34e50920004f4ad889aec4187919ccfa1",
+  "tarballName": "holaboss-runtime-macos-oss-b9acc1f34e50920004f4ad889aec4187919ccfa1.tar.gz"
+}

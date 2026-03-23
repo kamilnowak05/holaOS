@@ -1,0 +1,329 @@
+import { FormEvent, useMemo, useRef, useState } from "react";
+import { Search, Bell, User2, Palette, Loader2, Plus, RefreshCcw, ChevronDown, FolderKanban } from "lucide-react";
+import type { AppTheme } from "@/components/layout/AppShell";
+import { useWorkspaceDesktop } from "@/lib/workspaceDesktop";
+import { useWorkspaceSelection } from "@/lib/workspaceSelection";
+
+interface TopTabsBarProps {
+  theme: AppTheme;
+  onThemeChange: (theme: AppTheme) => void;
+  onUserMenuToggle?: (anchorBounds: BrowserAnchorBoundsPayload) => void;
+  runtimeIndicator?: {
+    label: string;
+    detail: string;
+    status?: RuntimeStatusPayload["status"] | null;
+  };
+}
+
+const THEME_OPTIONS: Array<{ value: AppTheme; label: string }> = [
+  { value: "emerald", label: "Emerald" },
+  { value: "cobalt", label: "Cobalt" },
+  { value: "ember", label: "Ember" },
+  { value: "glacier", label: "Glacier" },
+  { value: "mono", label: "Mono" },
+  { value: "claude", label: "Claude" },
+  { value: "slate", label: "Slate" },
+  { value: "paper", label: "Paper" },
+  { value: "graphite", label: "Graphite" }
+];
+
+export function TopTabsBar({ theme, onThemeChange, onUserMenuToggle, runtimeIndicator }: TopTabsBarProps) {
+  const userButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [workspaceSwitcherOpen, setWorkspaceSwitcherOpen] = useState(false);
+  const [createPanelOpen, setCreatePanelOpen] = useState(false);
+  const [workspaceQuery, setWorkspaceQuery] = useState("");
+  const { selectedWorkspaceId, setSelectedWorkspaceId } = useWorkspaceSelection();
+  const {
+    availableTemplates,
+    workspaces,
+    selectedWorkspace,
+    selectedTemplateName,
+    setSelectedTemplateName,
+    newWorkspaceName,
+    setNewWorkspaceName,
+    resolvedUserId,
+    isLoadingBootstrap,
+    isRefreshing,
+    isCreatingWorkspace,
+    workspaceErrorMessage,
+    setupStatus,
+    onboardingModeActive,
+    sessionModeLabel,
+    sessionTargetId,
+    refreshWorkspaceData,
+    createWorkspace
+  } = useWorkspaceDesktop();
+
+  const onCreateWorkspace = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void createWorkspace();
+  };
+
+  const filteredWorkspaces = useMemo(() => {
+    const query = workspaceQuery.trim().toLowerCase();
+    if (!query) {
+      return workspaces;
+    }
+
+    return workspaces.filter((workspace) => {
+      return (
+        workspace.name.toLowerCase().includes(query) ||
+        workspace.status.toLowerCase().includes(query) ||
+        (workspace.harness || "").toLowerCase().includes(query)
+      );
+    });
+  }, [workspaceQuery, workspaces]);
+
+  return (
+    <header className="theme-shell rounded-[var(--theme-radius-card)] border border-neon-green/25 px-2.5 py-2.5 shadow-card sm:px-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:gap-3">
+          <button
+            ref={userButtonRef}
+            type="button"
+            aria-label="Open account menu"
+            onClick={() => {
+              if (!onUserMenuToggle || !userButtonRef.current) {
+                return;
+              }
+
+              const rect = userButtonRef.current.getBoundingClientRect();
+              onUserMenuToggle({
+                x: rect.left,
+                y: rect.top,
+                width: rect.width,
+                height: rect.height
+              });
+            }}
+            className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[var(--theme-radius-pill)] border border-neon-green/45 bg-neon-green/10 text-neon-green shadow-glow transition hover:border-neon-green/70 hover:bg-neon-green/16"
+          >
+            <User2 size={15} />
+          </button>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[220px] max-w-full">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkspaceSwitcherOpen((open) => !open);
+                    setCreatePanelOpen(false);
+                  }}
+                  className="theme-control-surface inline-flex w-full items-center gap-2 rounded-[16px] border border-panel-border/45 px-3 py-2 text-left text-[12px] text-text-main transition hover:border-neon-green/35"
+                >
+                  <FolderKanban size={14} className="shrink-0 text-neon-green/85" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{selectedWorkspace?.name || "Select workspace"}</span>
+                    <span className="block truncate text-[10px] uppercase tracking-[0.14em] text-text-dim/72">
+                      {selectedWorkspace ? selectedWorkspace.status : workspaces.length ? `${workspaces.length} available` : "No workspaces yet"}
+                    </span>
+                  </span>
+                  <ChevronDown size={14} className={`shrink-0 transition ${workspaceSwitcherOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {workspaceSwitcherOpen ? (
+                  <div className="absolute left-0 top-[calc(100%+8px)] z-40 w-[min(360px,calc(100vw-48px))] rounded-[18px] border border-panel-border/70 bg-panel-bg px-3 py-3 shadow-card">
+                    <div className="mb-2 flex items-center gap-2">
+                      <Search size={13} className="text-neon-green/80" />
+                      <input
+                        value={workspaceQuery}
+                        onChange={(event) => setWorkspaceQuery(event.target.value)}
+                        placeholder="Search workspaces"
+                        className="w-full bg-transparent text-[12px] text-text-main outline-none placeholder:text-text-dim/42"
+                      />
+                    </div>
+
+                    <div className="max-h-[240px] overflow-y-auto">
+                      {filteredWorkspaces.length ? (
+                        <div className="grid gap-2">
+                          {filteredWorkspaces.map((workspace) => {
+                            const isActive = workspace.id === selectedWorkspaceId;
+                            return (
+                              <button
+                                key={workspace.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedWorkspaceId(workspace.id);
+                                  setWorkspaceSwitcherOpen(false);
+                                  setWorkspaceQuery("");
+                                }}
+                                className={`w-full rounded-[14px] border px-3 py-2 text-left transition ${
+                                  isActive
+                                    ? "border-neon-green/45 bg-neon-green/10 text-text-main"
+                                    : "border-panel-border/35 bg-transparent text-text-main/86 hover:border-neon-green/30 hover:bg-[var(--theme-hover-bg)]"
+                                }`}
+                              >
+                                <div className="truncate text-[12px] font-medium">{workspace.name}</div>
+                                <div className="mt-1 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.14em] text-text-dim/72">
+                                  <span>{workspace.status}</span>
+                                  {workspace.harness ? <span>{workspace.harness}</span> : null}
+                                  {workspace.onboarding_status ? <span>onboarding {workspace.onboarding_status}</span> : null}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-[14px] border border-panel-border/35 px-3 py-4 text-[12px] text-text-dim/78">
+                          No workspaces matched your search.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCreatePanelOpen((open) => !open);
+                  setWorkspaceSwitcherOpen(false);
+                }}
+                className="inline-flex h-[42px] items-center justify-center gap-2 rounded-[16px] border border-neon-green/40 bg-neon-green/10 px-3 text-[12px] text-neon-green transition hover:bg-neon-green/14 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!resolvedUserId}
+              >
+                <Plus size={14} />
+                <span>New workspace</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void refreshWorkspaceData()}
+                disabled={isRefreshing || isLoadingBootstrap}
+                className="inline-flex h-[42px] items-center justify-center gap-2 rounded-[16px] border border-panel-border/45 px-3 text-[12px] text-text-muted transition hover:border-neon-green/35 hover:text-text-main disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isRefreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            {createPanelOpen ? (
+              <form onSubmit={onCreateWorkspace} className="theme-subtle-surface mt-2 grid gap-2 rounded-[18px] border border-panel-border/45 p-3">
+                <div className="grid gap-2 xl:grid-cols-[minmax(170px,0.9fr)_minmax(220px,1.2fr)_auto]">
+                  <label className="theme-control-surface flex min-w-0 items-center gap-2 rounded-[16px] border border-panel-border/45 px-3 py-2 text-[12px] text-text-muted/82">
+                    <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-text-dim/72">Template</span>
+                    <select
+                      value={selectedTemplateName}
+                      onChange={(event) => setSelectedTemplateName(event.target.value)}
+                      className="min-w-0 flex-1 bg-transparent text-[12px] text-text-main outline-none"
+                    >
+                      <option value="">{availableTemplates.length ? "Select template" : "No templates"}</option>
+                      {availableTemplates.map((template) => (
+                        <option key={template.name} value={template.name} className="bg-obsidian text-text-main">
+                          {template.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <input
+                    value={newWorkspaceName}
+                    onChange={(event) => setNewWorkspaceName(event.target.value)}
+                    placeholder="New workspace name"
+                    className="theme-control-surface min-w-0 rounded-[16px] border border-panel-border/45 bg-transparent px-3 py-2 text-[12px] text-text-main outline-none placeholder:text-text-dim/40"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={!resolvedUserId || !selectedTemplateName || isCreatingWorkspace}
+                    className="inline-flex h-[42px] items-center justify-center gap-2 rounded-[16px] border border-neon-green/40 bg-neon-green/10 px-3 text-[12px] text-neon-green transition hover:bg-neon-green/14 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {isCreatingWorkspace ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                    <span>Create</span>
+                  </button>
+                </div>
+
+                {selectedTemplateName ? (
+                  <div className="text-[11px] text-text-dim/78">
+                    {availableTemplates.find((template) => template.name === selectedTemplateName)?.description || "Template selected."}
+                  </div>
+                ) : null}
+              </form>
+            ) : null}
+
+            {selectedWorkspace ? (
+              <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-text-dim">
+                <span className="rounded-full border border-panel-border/45 px-2 py-1">{selectedWorkspace.name}</span>
+                <span className="rounded-full border border-panel-border/45 px-2 py-1">status {selectedWorkspace.status}</span>
+                <span className="rounded-full border border-panel-border/45 px-2 py-1">
+                  onboarding {selectedWorkspace.onboarding_status}
+                </span>
+                <span
+                  className={`rounded-full border px-2 py-1 ${
+                    onboardingModeActive
+                      ? "border-[rgba(255,196,120,0.42)] bg-[rgba(255,196,120,0.1)] text-[rgba(255,220,171,0.95)]"
+                      : "border-panel-border/45"
+                  }`}
+                >
+                  mode {sessionModeLabel}
+                </span>
+              </div>
+            ) : null}
+
+            {setupStatus ? (
+              <div
+                className={`mt-2 rounded-[14px] border px-3 py-2 text-[11px] ${
+                  setupStatus.tone === "success"
+                    ? "border-neon-green/30 bg-neon-green/10 text-text-main/92"
+                    : setupStatus.tone === "warning"
+                      ? "border-[rgba(255,153,102,0.24)] bg-[rgba(255,153,102,0.08)] text-[rgba(255,212,189,0.92)]"
+                      : "border-panel-border/45 bg-[var(--theme-subtle-bg)] text-text-main/86"
+                }`}
+              >
+                {setupStatus.message}
+              </div>
+            ) : null}
+
+            {workspaceErrorMessage ? (
+              <div className="mt-2 rounded-[14px] border border-[rgba(255,153,102,0.24)] bg-[rgba(255,153,102,0.08)] px-3 py-2 text-[11px] text-[rgba(255,212,189,0.92)]">
+                {workspaceErrorMessage}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          {runtimeIndicator ? (
+            <div
+              title={runtimeIndicator.detail}
+              aria-label={runtimeIndicator.label}
+              className="theme-control-surface hidden h-8 items-center gap-2 rounded-[var(--theme-radius-pill)] border border-panel-border px-3 text-[11px] text-text-muted/78 lg:inline-flex"
+            >
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${
+                  runtimeIndicator.status === "running"
+                    ? "bg-neon-green shadow-glow"
+                    : runtimeIndicator.status === "starting"
+                      ? "bg-amber-300"
+                      : runtimeIndicator.status === "error" ||
+                          runtimeIndicator.status === "stopped" ||
+                          runtimeIndicator.status === "missing"
+                        ? "bg-rose-300"
+                        : "bg-text-muted/45"
+                }`}
+              />
+              <span className="truncate">{runtimeIndicator.label}</span>
+            </div>
+          ) : null}
+          <label className="theme-control-surface hidden items-center gap-2 rounded-[var(--theme-radius-pill)] border border-panel-border px-3 py-1.5 text-xs text-text-muted/85 lg:flex">
+            <Palette size={13} className="text-neon-green/80" />
+            <select
+              value={theme}
+              onChange={(event) => onThemeChange(event.target.value as AppTheme)}
+              className="bg-transparent pr-1 text-xs text-text-main/85 outline-none"
+            >
+              {THEME_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value} className="bg-obsidian text-text-main">
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="theme-control-surface hidden h-8 w-8 place-items-center rounded-[var(--theme-radius-control)] border border-panel-border text-text-muted/85 transition hover:border-neon-green/50 hover:text-neon-green sm:grid">
+            <Bell size={14} />
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}

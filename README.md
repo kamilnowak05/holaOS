@@ -1,38 +1,88 @@
 # Hola Boss OSS
 
-Holaboss OSS is the public home for the runtime code and packaging assets that power local and hosted Holaboss execution.
+This repo now contains both the local desktop app and the runtime it embeds.
 
 ## Layout
 
-- `runtime/src/`: Python source of truth for `sandbox_agent_runtime`
-- `runtime/tests/`: pytest coverage for the runtime package
-- `runtime/deploy/`: Dockerfiles, bootstrap scripts, entrypoints, and bundle assembly
-- `docs/`: runtime boundary and packaging notes
+- `desktop/`: Electron + React desktop app
+- `runtime/`: Python runtime package, tests, and packaging scripts
+- `.github/workflows/`: CI and publishing workflows
 
-## Development
+## Prerequisites
 
-Runtime tests live under `runtime/tests/` and are configured by `runtime/pyproject.toml`.
+- Node.js 22+
+- npm
+- Python 3.12
+- `uv`
+
+## Quick Start
+
+Install desktop dependencies:
 
 ```bash
-cd runtime
-uv run pytest
+npm run desktop:install
 ```
 
-Release and bundle workflows build from:
-- `runtime/src/**`
-- `runtime/pyproject.toml`
-- `runtime/uv.lock`
-- `runtime/deploy/**`
+Build and stage a local runtime bundle from this repo into `desktop/build/runtime-macos`:
 
-`runtime/deploy` packages the runtime, but it is no longer the source of truth for Python code.
+```bash
+npm run desktop:prepare-runtime:local
+```
 
+Run the desktop app in development:
 
-## Star History
+```bash
+npm run desktop:dev
+```
 
-<a href="https://www.star-history.com/?repos=holaboss-ai%2Fhola-boss-oss&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=holaboss-ai/hola-boss-oss&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=holaboss-ai/hola-boss-oss&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=holaboss-ai/hola-boss-oss&type=date&legend=top-left" />
- </picture>
-</a>
+This starts:
+
+- the Vite renderer dev server
+- the Electron main/preload watcher
+- the Electron app itself
+
+## Common Commands
+
+Run the desktop typecheck:
+
+```bash
+npm run desktop:typecheck
+```
+
+Run runtime tests:
+
+```bash
+npm run runtime:test
+```
+
+Build a local macOS desktop bundle with the locally built runtime embedded:
+
+```bash
+npm run desktop:dist:mac:local
+```
+
+Stage the runtime from the pinned desktop manifest instead of building it locally:
+
+```bash
+npm run desktop:prepare-runtime
+```
+
+## Development Notes
+
+The root `package.json` is just a thin command wrapper for the desktop app. The actual desktop project still lives in `desktop/package.json`.
+
+`runtime/` remains independently buildable and testable. The desktop app consumes its packaged output rather than importing Python source files directly.
+
+For local desktop work, the default flow is:
+
+```bash
+npm run desktop:install
+npm run desktop:prepare-runtime:local
+npm run desktop:dev
+```
+
+For runtime-only work, the main command is:
+
+```bash
+npm run runtime:test
+```

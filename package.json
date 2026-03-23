@@ -1,0 +1,14 @@
+{
+  "name": "hola-boss-oss",
+  "private": true,
+  "scripts": {
+    "dev": "npm run desktop:dev",
+    "desktop:install": "npm install --prefix desktop",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:typecheck": "npm --prefix desktop run typecheck",
+    "desktop:prepare-runtime": "npm --prefix desktop run prepare:runtime",
+    "desktop:prepare-runtime:local": "npm --prefix desktop run prepare:runtime:local",
+    "desktop:dist:mac:local": "npm --prefix desktop run dist:mac:local",
+    "runtime:test": "cd runtime && uv run pytest"
+  }
+}

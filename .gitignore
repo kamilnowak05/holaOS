@@ -5,3 +5,14 @@ __pycache__/
 out/
 
 .venv/
+desktop/node_modules/
+desktop/dist/
+desktop/dist-ssr/
+desktop/dist-electron/
+desktop/release/
+desktop/build/
+desktop/.cache/
+desktop/*.tsbuildinfo
+desktop/.env
+desktop/.env.*
+desktop/*.local
