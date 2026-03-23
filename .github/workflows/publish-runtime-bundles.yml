@@ -25,6 +25,9 @@ jobs:
       RELEASE_TAG: runtime-bundles-${{ github.ref_name }}
       RELEASE_TITLE: Runtime Bundles (${{ github.ref_name }})
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Ensure runtime release exists
         env:
           GH_TOKEN: ${{ github.token }}
