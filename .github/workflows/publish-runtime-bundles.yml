@@ -67,24 +67,14 @@ jobs:
           fi
 
   publish-macos-runtime:
-    name: Build macOS runtime bundle (${{ matrix.runtime_flavor }})
+    name: Build macOS runtime bundle
     needs: ensure-runtime-release
     runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runtime_flavor: holaboss
-            output_dir: runtime-macos
-            asset_prefix: holaboss-runtime-macos
-            artifact_prefix: holaboss-runtime-macos
-          - runtime_flavor: oss
-            output_dir: runtime-macos-oss
-            asset_prefix: holaboss-runtime-macos-oss
-            artifact_prefix: holaboss-runtime-macos-oss
     env:
       RELEASE_TAG: ${{ needs.ensure-runtime-release.outputs.release_tag }}
       RELEASE_TITLE: ${{ needs.ensure-runtime-release.outputs.release_title }}
+      OUTPUT_DIR: runtime-macos
+      ASSET_PREFIX: holaboss-runtime-macos
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -106,28 +96,82 @@ jobs:
       - name: Build macOS runtime bundle
         env:
           HOLABOSS_MACOS_PYTHON_BIN: ${{ env.pythonLocation }}/bin/python
-          HOLABOSS_RUNTIME_FLAVOR: ${{ matrix.runtime_flavor }}
         run: |
-          bash runtime/deploy/package_macos_runtime.sh "out/${{ matrix.output_dir }}"
+          bash runtime/deploy/package_macos_runtime.sh "out/${OUTPUT_DIR}"
 
       - name: Archive macOS runtime bundle
         run: |
-          tar -C out -czf "out/${{ matrix.asset_prefix }}-${GITHUB_SHA}.tar.gz" "${{ matrix.output_dir }}"
+          tar -C out -czf "out/${ASSET_PREFIX}-${GITHUB_SHA}.tar.gz" "${OUTPUT_DIR}"
 
       - name: Upload macOS runtime bundle release asset
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "${RELEASE_TAG}" \
-            "out/${{ matrix.asset_prefix }}-${GITHUB_SHA}.tar.gz" \
+            "out/${ASSET_PREFIX}-${GITHUB_SHA}.tar.gz" \
             --clobber
 
       - name: Upload macOS runtime bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_prefix }}-${{ github.sha }}
+          name: ${{ env.ASSET_PREFIX }}-${{ github.sha }}
           path: |
-            out/${{ matrix.asset_prefix }}-${{ github.sha }}.tar.gz
-            out/${{ matrix.output_dir }}/package-metadata.json
-            out/${{ matrix.output_dir }}/runtime/metadata.json
+            out/${{ env.ASSET_PREFIX }}-${{ github.sha }}.tar.gz
+            out/${{ env.OUTPUT_DIR }}/package-metadata.json
+            out/${{ env.OUTPUT_DIR }}/runtime/metadata.json
+          if-no-files-found: error
+
+  publish-linux-runtime:
+    name: Build Linux runtime bundle
+    needs: ensure-runtime-release
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ needs.ensure-runtime-release.outputs.release_tag }}
+      RELEASE_TITLE: ${{ needs.ensure-runtime-release.outputs.release_title }}
+      OUTPUT_DIR: runtime-linux
+      ASSET_PREFIX: holaboss-runtime-linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install uv
+        run: |
+          "${{ env.pythonLocation }}/bin/python" -m pip install uv
+
+      - name: Build Linux runtime bundle
+        env:
+          HOLABOSS_LINUX_PYTHON_BIN: ${{ env.pythonLocation }}/bin/python
+        run: |
+          bash runtime/deploy/package_linux_runtime.sh "out/${OUTPUT_DIR}"
+
+      - name: Archive Linux runtime bundle
+        run: |
+          tar -C out -czf "out/${ASSET_PREFIX}-${GITHUB_SHA}.tar.gz" "${OUTPUT_DIR}"
+
+      - name: Upload Linux runtime bundle release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${RELEASE_TAG}" \
+            "out/${ASSET_PREFIX}-${GITHUB_SHA}.tar.gz" \
+            --clobber
+
+      - name: Upload Linux runtime bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET_PREFIX }}-${{ github.sha }}
+          path: |
+            out/${{ env.ASSET_PREFIX }}-${{ github.sha }}.tar.gz
+            out/${{ env.OUTPUT_DIR }}/package-metadata.json
+            out/${{ env.OUTPUT_DIR }}/runtime/metadata.json
           if-no-files-found: error
