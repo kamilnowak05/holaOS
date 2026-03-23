@@ -38,7 +38,7 @@ npm run dev
 
 This launches:
 - Vite dev server for the renderer (`http://localhost:5173`)
-- TS build watcher for Electron main/preload (`../out/desktop/dist-electron/*.cjs`)
+- TS build watcher for Electron main/preload (`out/dist-electron/*.cjs`)
 - Electron desktop window with live restarts on main/preload changes
 
 Control-plane endpoint presets:
@@ -54,7 +54,7 @@ npm run dev:cp:dev
 npm run dev:cp:prod
 ```
 
-`prepare:runtime` downloads the pinned macOS runtime bundle from the GitHub release defined in [runtime-manifest.json](/Users/jeffrey/Desktop/hola-boss-oss/desktop/runtime-manifest.json) and stages it into `../out/desktop/runtime-macos/`.
+`prepare:runtime` downloads the pinned macOS runtime bundle from the GitHub release defined in [runtime-manifest.json](/Users/jeffrey/Desktop/hola-boss-oss/desktop/runtime-manifest.json) and stages it into `out/runtime-macos/`.
 
 ## Build
 
@@ -63,12 +63,12 @@ npm run build
 ```
 
 This creates:
-- Renderer production bundle in `../out/desktop/dist/`
-- Electron main/preload bundles in `../out/desktop/dist-electron/`
+- Renderer production bundle in `out/dist/`
+- Electron main/preload bundles in `out/dist-electron/`
 
 ## Runtime Bundle
 
-Production mac builds expect a staged runtime bundle at `../out/desktop/runtime-macos/`. You can stage it with:
+Production mac builds expect a staged runtime bundle at `out/runtime-macos/`. You can stage it with:
 
 ```bash
 npm run prepare:runtime
@@ -80,7 +80,7 @@ For local development against unreleased `hola-boss-oss` runtime changes:
 # optional when your OSS repo is not ../hola-boss-oss
 export HOLABOSS_OSS_ROOT=/absolute/path/to/hola-boss-oss
 
-# builds runtime bundle from local hola-boss-oss and stages it into ../out/desktop/runtime-macos
+# builds runtime bundle from local hola-boss-oss and stages it into out/runtime-macos
 npm run prepare:runtime:local
 ```
 
@@ -109,12 +109,12 @@ Use `dist:mac` when you intentionally want the runtime pinned in [runtime-manife
 This produces an unsigned local mac app bundle with `runtime-macos` embedded in `Contents/Resources/`.
 
 Output:
-- [Holaboss Workspace.app](/Users/jeffrey/Desktop/hola-boss-oss/out/desktop/release/mac-arm64/Holaboss%20Workspace.app)
+- [Holaboss Workspace.app](/Users/jeffrey/Desktop/hola-boss-oss/desktop/out/release/mac-arm64/Holaboss%20Workspace.app)
 
 Run packaged app with endpoint presets:
 
 ```bash
-# uses ../out/desktop/release/mac-arm64/... by default
+# uses out/release/mac-arm64/... by default
 npm run packaged:run:local
 npm run packaged:run:dev
 npm run packaged:run:prod
@@ -133,7 +133,7 @@ To build a mac installer image:
 GITHUB_TOKEN="$(gh auth token)" npm run dist:mac:dmg
 ```
 
-This produces an unsigned `.dmg` installer in `../out/desktop/release/`.
+This produces an unsigned `.dmg` installer in `out/release/`.
 
 Notes:
 - `dist:mac` builds an unpacked `.app`

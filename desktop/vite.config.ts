@@ -6,7 +6,7 @@ export default defineConfig({
   base: "./",
   plugins: [react()],
   build: {
-    outDir: "../out/desktop/dist",
+    outDir: "out/dist",
     emptyOutDir: true
   },
   resolve: {

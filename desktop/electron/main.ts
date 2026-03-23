@@ -234,7 +234,7 @@ let runtimeStatus: RuntimeStatusPayload = {
 const RUNTIME_API_PORT = 5060;
 const RUNTIME_OPENCODE_PORT = 5096;
 const DEV_RUNTIME_ROOT = "/tmp/holaboss-runtime-macos-full";
-const STAGED_RUNTIME_ROOT = path.join("out", "desktop", "runtime-macos");
+const STAGED_RUNTIME_ROOT = path.join("out", "runtime-macos");
 const DESKTOP_USER_DATA_DIR = (process.env.HOLABOSS_DESKTOP_USER_DATA_DIR?.trim() || "holaboss-local").replace(
   /[\\/]+/g,
   "_"
@@ -3158,7 +3158,7 @@ async function fileExists(targetPath: string) {
 async function resolveRuntimeRoot() {
   const candidates = [
     process.env.HOLABOSS_RUNTIME_ROOT,
-    isDev ? path.resolve(app.getAppPath(), "..", STAGED_RUNTIME_ROOT) : undefined,
+    isDev ? path.resolve(__dirname, "..", "runtime-macos") : undefined,
     isDev ? DEV_RUNTIME_ROOT : path.join(process.resourcesPath, "runtime-macos")
   ].filter((value): value is string => Boolean(value && value.trim().length > 0));
 

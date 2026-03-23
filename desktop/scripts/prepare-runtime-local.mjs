@@ -45,4 +45,4 @@ if ((stageRuntime.status ?? 1) !== 0) {
   process.exit(stageRuntime.status ?? 1);
 }
 
-console.log("[prepare-runtime:local] staged local runtime into ../out/desktop/runtime-macos");
+console.log("[prepare-runtime:local] staged local runtime into out/runtime-macos");

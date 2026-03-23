@@ -6,6 +6,7 @@ out/
 
 .venv/
 desktop/node_modules/
+desktop/out/
 desktop/.cache/
 desktop/*.tsbuildinfo
 desktop/.env

@@ -11,7 +11,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
-const stageParentDir = path.resolve(repoRoot, "..", "out", "desktop");
+const stageParentDir = path.join(repoRoot, "out");
 const stageDir = path.join(stageParentDir, "runtime-macos");
 const defaultLocalRuntimeDir = "/tmp/holaboss-runtime-macos-full";
 const manifestPath = path.join(repoRoot, "runtime-manifest.json");

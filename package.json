@@ -4,7 +4,7 @@
   "scripts": {
     "clean": "rm -rf out desktop/build runtime/out",
     "dev": "npm run desktop:dev",
-    "desktop:clean": "rm -rf out/desktop desktop/build desktop/out",
+    "desktop:clean": "rm -rf desktop/out desktop/build",
     "desktop:install": "npm install --prefix desktop",
     "desktop:dev": "npm --prefix desktop run dev",
     "desktop:typecheck": "npm --prefix desktop run typecheck",

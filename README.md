@@ -23,7 +23,7 @@ Install desktop dependencies:
 npm run desktop:install
 ```
 
-Build and stage a local runtime bundle from this repo into `out/desktop/runtime-macos`:
+Build and stage a local runtime bundle from this repo into `desktop/out/runtime-macos`:
 
 ```bash
 npm run desktop:prepare-runtime:local
