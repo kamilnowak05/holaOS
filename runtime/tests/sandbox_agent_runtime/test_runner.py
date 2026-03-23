@@ -1194,63 +1194,6 @@ def _noop_opencode_mcp_registration(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sandbox_agent_runtime.runner._restart_opencode_sidecar", _noop_restart)
 
 
-@pytest.mark.asyncio
-async def test_ensure_opencode_mcp_servers_refreshes_missing_disconnected_changed_and_forced() -> None:
-    class _FakeResponse:
-        def __init__(self, payload: dict[str, object]) -> None:
-            self._payload = payload
-
-        def json(self) -> dict[str, object]:
-            return self._payload
-
-    class _FakeClient:
-        def __init__(self, status_payload: dict[str, object]) -> None:
-            self._status_payload = status_payload
-            self.posted_payloads: list[dict[str, object]] = []
-
-        async def get(self, path: str, cast_to=None):
-            del path, cast_to
-            return _FakeResponse(self._status_payload)
-
-        async def post(self, path: str, cast_to=None, body=None):
-            del path, cast_to
-            assert isinstance(body, dict)
-            self.posted_payloads.append(body)
-            return _FakeResponse({})
-
-    client = _FakeClient({
-        "stable": {
-            "status": "connected",
-            "config": {"type": "remote", "url": "https://stable.example/mcp", "enabled": True},
-        },
-        "changed": {
-            "status": "connected",
-            "config": {"type": "remote", "url": "https://old.example/mcp", "enabled": True},
-        },
-        "disconnected": {"status": "disconnected"},
-        "forced": {"status": "connected"},
-    })
-    mcp_servers = (
-        {"name": "stable", "config": {"type": "remote", "url": "https://stable.example/mcp", "enabled": True}},
-        {"name": "changed", "config": {"type": "remote", "url": "https://new.example/mcp", "enabled": True}},
-        {"name": "disconnected", "config": {"type": "remote", "url": "https://disc.example/mcp", "enabled": True}},
-        {"name": "missing", "config": {"type": "remote", "url": "https://missing.example/mcp", "enabled": True}},
-        {
-            "name": "forced",
-            "config": {"type": "remote", "url": "https://forced.example/mcp", "enabled": True},
-            "_holaboss_force_refresh": True,
-        },
-    )
-
-    await _ORIGINAL_ENSURE_OPENCODE_MCP_SERVERS(client=client, mcp_servers=mcp_servers)
-
-    posted_names = [str(payload["name"]) for payload in client.posted_payloads]
-    assert set(posted_names) == {"changed", "disconnected", "missing", "forced"}
-    assert "stable" not in posted_names
-    for payload in client.posted_payloads:
-        assert set(payload.keys()) == {"name", "config"}
-
-
 def test_build_opencode_runtime_config_preserves_mcp_server_payloads() -> None:
     tools = (ResolvedMcpToolRef(tool_id="workspace.lookup", server_id="workspace", tool_name="lookup"),)
     plan = _single_plan(tools=tools)

@@ -82,6 +82,7 @@ _WORKSPACE_MCP_SERVER_ID = "workspace"
 _WORKSPACE_MCP_READY_TIMEOUT_S = 10.0
 _WORKSPACE_MCP_READY_POLL_S = 0.2
 _WORKSPACE_MCP_LOCK_TIMEOUT_S = 15.0
+_OPENCODE_LOCK_TIMEOUT_S = 15.0
 _SESSION_STATE_DIR_NAME = ".holaboss"
 _SESSION_STATE_FILE_NAME = "harness-session-state.json"
 _SESSION_STATE_VERSION = 1
@@ -870,6 +871,35 @@ async def _acquire_workspace_mcp_lock(*, physical_server_id: str) -> Any:
 
 
 def _release_workspace_mcp_lock(*, lock_file: Any) -> None:
+    with suppress(Exception):
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    with suppress(Exception):
+        lock_file.close()
+
+
+def _opencode_lock_path() -> Path:
+    state_dir = Path(WORKSPACE_ROOT) / _SESSION_STATE_DIR_NAME
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return state_dir / "opencode-sidecar.lock"
+
+
+async def _acquire_opencode_lock() -> Any:
+    lock_path = _opencode_lock_path()
+    lock_file = lock_path.open("a+", encoding="utf-8")
+    deadline = asyncio.get_running_loop().time() + _OPENCODE_LOCK_TIMEOUT_S
+    while True:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            if asyncio.get_running_loop().time() >= deadline:
+                lock_file.close()
+                raise RuntimeError("timed out waiting for OpenCode sidecar restart lock") from None
+            await asyncio.sleep(0.05)
+        else:
+            return lock_file
+
+
+def _release_opencode_lock(*, lock_file: Any) -> None:
     with suppress(Exception):
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
     with suppress(Exception):
@@ -1961,11 +1991,12 @@ def _opencode_ready_timeout_seconds() -> float:
     return 30.0
 
 
-async def _restart_opencode_sidecar() -> None:
+async def _restart_opencode_sidecar(*, allow_reuse_existing: bool = False) -> None:
     host = _opencode_server_host()
     port = _opencode_server_port()
     process_marker = f"opencode serve --hostname {host} --port {port}"
     workspace_root = str(Path(WORKSPACE_ROOT))
+    readiness_url = f"{_opencode_base_url()}/mcp"
 
     async def _opencode_sidecar_pids() -> list[int]:
         try:
@@ -1995,59 +2026,66 @@ async def _restart_opencode_sidecar() -> None:
                 pids.append(int(pid_token))
         return pids
 
-    running_pids = await _opencode_sidecar_pids()
-    for pid in sorted(set(running_pids)):
-        _terminate_workspace_mcp_pid(pid)
-
-    if running_pids:
-        deadline = asyncio.get_running_loop().time() + 3.0
-        while asyncio.get_running_loop().time() < deadline:
-            if not await _opencode_sidecar_pids():
-                break
-            await asyncio.sleep(0.1)
-        remaining = await _opencode_sidecar_pids()
-        for pid in sorted(set(remaining)):
-            with suppress(OSError):
-                os.kill(pid, signal.SIGKILL)
-        if remaining:
-            await asyncio.sleep(0.1)
-            if await _opencode_sidecar_pids():
-                raise RuntimeError("failed to stop existing OpenCode sidecar before restart")
-
-    with _opencode_server_log_path().open("ab") as log_file:
-        try:
-            sidecar_process = await asyncio.create_subprocess_exec(
-                "opencode",
-                "serve",
-                "--hostname",
-                host,
-                "--port",
-                str(port),
-                cwd=workspace_root,
-                stdout=log_file,
-                stderr=asyncio.subprocess.STDOUT,
-                start_new_session=True,
-            )
-        except Exception as exc:
-            raise RuntimeError(f"failed to restart OpenCode sidecar: {exc}") from exc
+    lock_file = await _acquire_opencode_lock()
     try:
-        await asyncio.wait_for(sidecar_process.wait(), timeout=0.2)
-    except TimeoutError:
-        pass
-    else:
-        raise RuntimeError(f"OpenCode sidecar exited during startup with code {sidecar_process.returncode}")
+        if allow_reuse_existing and await _workspace_mcp_is_ready(url=readiness_url):
+            return
 
-    await _wait_for_opencode_ready(
-        url=f"{_opencode_base_url()}/mcp",
-        timeout_seconds=_opencode_ready_timeout_seconds(),
-    )
+        running_pids = await _opencode_sidecar_pids()
+        for pid in sorted(set(running_pids)):
+            _terminate_workspace_mcp_pid(pid)
+
+        if running_pids:
+            deadline = asyncio.get_running_loop().time() + 3.0
+            while asyncio.get_running_loop().time() < deadline:
+                if not await _opencode_sidecar_pids():
+                    break
+                await asyncio.sleep(0.1)
+            remaining = await _opencode_sidecar_pids()
+            for pid in sorted(set(remaining)):
+                with suppress(OSError):
+                    os.kill(pid, signal.SIGKILL)
+            if remaining:
+                await asyncio.sleep(0.1)
+                if await _opencode_sidecar_pids():
+                    raise RuntimeError("failed to stop existing OpenCode sidecar before restart")
+
+        with _opencode_server_log_path().open("ab") as log_file:
+            try:
+                sidecar_process = await asyncio.create_subprocess_exec(
+                    "opencode",
+                    "serve",
+                    "--hostname",
+                    host,
+                    "--port",
+                    str(port),
+                    cwd=workspace_root,
+                    stdout=log_file,
+                    stderr=asyncio.subprocess.STDOUT,
+                    start_new_session=True,
+                )
+            except Exception as exc:
+                raise RuntimeError(f"failed to restart OpenCode sidecar: {exc}") from exc
+        try:
+            await asyncio.wait_for(sidecar_process.wait(), timeout=0.2)
+        except TimeoutError:
+            pass
+        else:
+            raise RuntimeError(f"OpenCode sidecar exited during startup with code {sidecar_process.returncode}")
+
+        await _wait_for_opencode_ready(
+            url=readiness_url,
+            timeout_seconds=_opencode_ready_timeout_seconds(),
+        )
+    finally:
+        _release_opencode_lock(lock_file=lock_file)
 
 
 async def _ensure_opencode_sidecar_ready() -> str:
     readiness_url = f"{_opencode_base_url()}/mcp"
     if await _workspace_mcp_is_ready(url=readiness_url):
         return "reused"
-    await _restart_opencode_sidecar()
+    await _restart_opencode_sidecar(allow_reuse_existing=True)
     return "started"
 
 
