@@ -24,3 +24,14 @@ That means the first OSS extraction step is:
 3. only reintroduce more code if a dependency audit proves it is required
 
 Use [docs/ALLOWLIST.md](docs/ALLOWLIST.md) as the import rule and [docs/STANDALONE_RUNTIME_AUDIT.md](docs/STANDALONE_RUNTIME_AUDIT.md) as the dependency record.
+
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=holaboss-ai%2Fhola-boss-oss&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=holaboss-ai/hola-boss-oss&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=holaboss-ai/hola-boss-oss&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=holaboss-ai/hola-boss-oss&type=date&legend=top-left" />
+ </picture>
+</a>
