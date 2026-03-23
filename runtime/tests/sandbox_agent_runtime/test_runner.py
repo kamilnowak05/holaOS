@@ -1163,16 +1163,52 @@ skills:
     workspace_skills = runner_module._resolve_workspace_skills(workspace_dir=workspace_dir)
     assert workspace_skills is not None
 
-    runner_module._stage_workspace_skills_for_opencode(
+    changed = runner_module._stage_workspace_skills_for_opencode(
         workspace_dir=workspace_dir,
         workspace_skills=workspace_skills,
     )
+    assert changed is True
 
     staged_skill = workspace_dir / ".opencode" / "skills" / "skill-creator" / "SKILL.md"
     assert staged_skill.is_file()
     assert "Skill Creator" in staged_skill.read_text(encoding="utf-8")
     runtime_staged_skill = Path(runner_module.WORKSPACE_ROOT) / ".opencode" / "skills" / "skill-creator" / "SKILL.md"
     assert runtime_staged_skill.is_file()
+
+
+def test_stage_workspace_skills_for_opencode_is_noop_when_manifest_matches(tmp_path: Path) -> None:
+    workspace_dir = tmp_path / "workspace-1"
+    skill_dir = workspace_dir / "skills" / "skill-creator"
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text("# Skill Creator\n", encoding="utf-8")
+    (workspace_dir / "workspace.yaml").write_text(
+        """
+template_id: "workspace-1"
+name: "Workspace"
+skills:
+  path: "skills"
+  enabled:
+    - "skill-creator"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    workspace_skills = runner_module._resolve_workspace_skills(workspace_dir=workspace_dir)
+    assert workspace_skills is not None
+
+    first_changed = runner_module._stage_workspace_skills_for_opencode(
+        workspace_dir=workspace_dir,
+        workspace_skills=workspace_skills,
+    )
+    second_changed = runner_module._stage_workspace_skills_for_opencode(
+        workspace_dir=workspace_dir,
+        workspace_skills=workspace_skills,
+    )
+
+    assert first_changed is True
+    assert second_changed is False
+    runtime_staged_skill = Path(runner_module.WORKSPACE_ROOT) / ".opencode" / "skills" / "skill-creator" / "SKILL.md"
     assert "Skill Creator" in runtime_staged_skill.read_text(encoding="utf-8")
 
 

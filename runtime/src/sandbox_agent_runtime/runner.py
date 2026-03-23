@@ -73,7 +73,6 @@ _DEFAULT_OPENCODE_BASE_URL = f"http://{_DEFAULT_OPENCODE_HOST}:{_DEFAULT_OPENCOD
 _DEFAULT_OPENCODE_PROVIDER_ID = "openai"
 _DEFAULT_OPENCODE_SESSION_MODE = "code"
 _DEFAULT_OPENCODE_STRUCTURED_RETRY_COUNT = 2
-_OPENCODE_RESTART_EACH_RUN_FLAG = "OPENCODE_RESTART_EACH_RUN"
 _SUPPORTED_HARNESSES = {"agno", "opencode"}
 _SANDBOX_RUNTIME_API_URL_ENV = "SANDBOX_RUNTIME_API_URL"
 _DEFAULT_SANDBOX_RUNTIME_API_URL = "http://sandbox-runtime:3060"
@@ -96,6 +95,7 @@ _WORKSPACE_MCP_STDERR_LOG_BASENAME = "workspace-mcp-sidecar.stderr.log"
 _WORKSPACE_MCP_LOG_TAIL_BYTES = 4096
 _OPENCODE_STATE_FILE_NAME = "opencode-sidecar-state.json"
 _OPENCODE_STATE_VERSION = 1
+_OPENCODE_SKILL_MANIFEST_FILE_NAME = ".skill-manifest.json"
 
 
 class RunnerRequest(BaseModel):
@@ -630,36 +630,117 @@ def _remove_path(path: Path) -> None:
         shutil.rmtree(path)
 
 
+def _opencode_skill_manifest_payload(*, workspace_skills: _WorkspaceSkillsConfig) -> dict[str, Any]:
+    return {
+        "skills": [
+            {
+                "skill_id": skill.skill_id,
+                "source_dir": str(skill.skill_md_path.parent.resolve()),
+            }
+            for skill in workspace_skills.skills
+        ]
+    }
+
+
+def _read_opencode_skill_manifest(*, staged_root: Path) -> dict[str, Any] | None:
+    manifest_path = staged_root / _OPENCODE_SKILL_MANIFEST_FILE_NAME
+    if not manifest_path.is_file():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _write_opencode_skill_manifest(*, staged_root: Path, payload: dict[str, Any]) -> None:
+    manifest_path = staged_root / _OPENCODE_SKILL_MANIFEST_FILE_NAME
+    manifest_path.write_text(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2), encoding="utf-8")
+
+
+def _staged_skill_root_matches_manifest(*, staged_root: Path, manifest_payload: dict[str, Any]) -> bool:
+    existing_manifest = _read_opencode_skill_manifest(staged_root=staged_root)
+    if existing_manifest != manifest_payload:
+        return False
+
+    expected_names = {
+        str(item.get("skill_id", "")).strip()
+        for item in manifest_payload.get("skills", [])
+        if isinstance(item, dict)
+    }
+    if not expected_names:
+        return False
+
+    actual_names = {
+        child.name
+        for child in staged_root.iterdir()
+        if child.name != _OPENCODE_SKILL_MANIFEST_FILE_NAME
+    }
+    if actual_names != expected_names:
+        return False
+
+    for item in manifest_payload["skills"]:
+        if not isinstance(item, dict):
+            return False
+        skill_id = str(item.get("skill_id", "")).strip()
+        source_dir = Path(str(item.get("source_dir", "")).strip())
+        target_dir = staged_root / skill_id
+        if not target_dir.exists():
+            return False
+        if target_dir.is_symlink():
+            try:
+                if target_dir.resolve() != source_dir:
+                    return False
+            except OSError:
+                return False
+            continue
+        if not (target_dir / "SKILL.md").is_file():
+            return False
+    return True
+
+
 def _stage_workspace_skills_for_opencode(
     *, workspace_dir: Path, workspace_skills: _WorkspaceSkillsConfig | None
-) -> None:
+) -> bool:
     if workspace_skills is None:
-        return
+        return False
 
     workspace_staged_root = (workspace_dir / ".opencode" / "skills").resolve()
     # OpenCode skill discovery starts from the sidecar process working directory.
     # Runtime-staged skills are shared under WORKSPACE_ROOT/.opencode, not per-workspace directories.
     # Mirror enabled workspace skills at both locations so built-in `skill` discovery works.
     runtime_staged_root = (Path(WORKSPACE_ROOT) / ".opencode" / "skills").resolve()
+    manifest_payload = _opencode_skill_manifest_payload(workspace_skills=workspace_skills)
 
-    staged_roots: list[tuple[Path, bool]] = [(workspace_staged_root, False)]
+    staged_roots: list[Path] = [workspace_staged_root]
     if runtime_staged_root != workspace_staged_root:
-        staged_roots.append((runtime_staged_root, True))
+        staged_roots.append(runtime_staged_root)
 
-    for staged_root, clear_existing in staged_roots:
-        if clear_existing and (staged_root.exists() or staged_root.is_symlink()):
+    changed = False
+    for staged_root in staged_roots:
+        if staged_root.is_dir() and _staged_skill_root_matches_manifest(
+            staged_root=staged_root,
+            manifest_payload=manifest_payload,
+        ):
+            continue
+
+        if staged_root.exists() or staged_root.is_symlink():
             _remove_path(staged_root)
         staged_root.mkdir(parents=True, exist_ok=True)
 
         for skill in workspace_skills.skills:
             source_dir = skill.skill_md_path.parent.resolve()
             target_dir = staged_root / skill.skill_id
-            if target_dir.exists() or target_dir.is_symlink():
-                _remove_path(target_dir)
             try:
                 target_dir.symlink_to(source_dir, target_is_directory=True)
             except OSError:
                 shutil.copytree(source_dir, target_dir, dirs_exist_ok=False)
+        _write_opencode_skill_manifest(staged_root=staged_root, payload=manifest_payload)
+        changed = True
+
+    return changed
 
 
 def _stage_workspace_commands_for_opencode(*, workspace_dir: Path) -> None:
@@ -2157,11 +2238,6 @@ async def _ensure_opencode_sidecar_ready() -> str:
         return "reused"
     await _restart_opencode_sidecar(allow_reuse_existing=True)
     return "started"
-
-
-def _opencode_restart_each_run_enabled() -> bool:
-    return _enabled_flag(_OPENCODE_RESTART_EACH_RUN_FLAG)
-
 
 def _opencode_session_mode() -> str:
     mode = (os.getenv("OPENCODE_SESSION_MODE") or _DEFAULT_OPENCODE_SESSION_MODE).strip()
@@ -3923,7 +3999,7 @@ async def _execute_request_opencode(request: RunnerRequest) -> int:
 
             phase_started_at = time.perf_counter()
             workspace_skills = _resolve_workspace_skills(workspace_dir=workspace_dir)
-            _stage_workspace_skills_for_opencode(
+            workspace_skills_changed = _stage_workspace_skills_for_opencode(
                 workspace_dir=workspace_dir,
                 workspace_skills=workspace_skills,
             )
@@ -4031,15 +4107,12 @@ async def _execute_request_opencode(request: RunnerRequest) -> int:
                 runtime_config=runtime_config,
                 workspace_id=request.workspace_id,
             )
-            if _opencode_restart_each_run_enabled():
-                should_restart_opencode_sidecar = True
-                restart_policy = "each_run_env"
-            elif opencode_provider_config_changed:
+            if opencode_provider_config_changed:
                 should_restart_opencode_sidecar = True
                 restart_policy = "provider_config_refresh"
-            elif workspace_skills is not None:
+            elif workspace_skills_changed:
                 # OpenCode skill index is loaded from disk at sidecar startup.
-                # Workspace skill staging happens per-run, so restart to refresh the index.
+                # Restart only when the staged workspace skill set actually changed.
                 should_restart_opencode_sidecar = True
                 restart_policy = "workspace_skills_refresh"
 
